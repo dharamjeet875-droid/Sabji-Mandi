@@ -1,0 +1,17 @@
+{
+  "name": "Sabji Mandi",
+  "short_name": "Sabji Mandi",
+  "description": "Fresh vegetables group buying app",
+  "start_url": "/sabji-mandi/",
+  "display": "standalone",
+  "background_color": "#f2f7f3",
+  "theme_color": "#1a4731",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://emojicdn.elk.sh/🛒?style=apple",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

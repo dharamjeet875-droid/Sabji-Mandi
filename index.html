@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Sabji Mandi"/>
+  <title>Sabji Mandi 🛒</title>
+  <link rel="manifest" href="manifest.json"/>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f2f7f3; font-family: 'Nunito', 'Segoe UI', sans-serif; }
+    #root { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React + Babel for JSX in browser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+import { useState, useEffect, useCallback, useRef } from "react";
+
+// ─────────────────────────────────────────────────────────────
+//  SUPABASE CONFIG  – create a free project at supabase.com
+//  Replace the two values below with your own project details.
+//  Table needed:  mandi_data (id text PK, payload jsonb, updated_at timestamptz)
+// ─────────────────────────────────────────────────────────────
+const SUPABASE_URL    = "https://wsqwyygjywrmmhfayfwd.supabase.co";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzcXd5eWdqeXdybW1oZmF5ZndkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MjkxNDMsImV4cCI6MjA5MzIwNTE0M30.27D6sscdoxEuRWtvuwETqABjycQfV5BcSWeq5Bjtu8E";
+const ROW_ID          = "main";                            // single shared row
+
+// ─────────────────────────────────────────────────────────────
+//  CONSTANTS
+// ─────────────────────────────────────────────────────────────
+const MEMBERS   = ["Kuldeep Singh","Beant Singh","Satwinder Singh","Dharamjeet Singh","Gurpreet Singh"];
+const ADMIN_PIN = "1234";
+
+const CATEGORIES = {
+  Vegetables: [
+    { name:"Tomato",        emoji:"🍅" }, { name:"Potato",        emoji:"🥔" },
+    { name:"Onion",         emoji:"🧅" }, { name:"Garlic",        emoji:"🧄" },
+    { name:"Ginger",        emoji:"🫚" }, { name:"Spinach",       emoji:"🥬" },
+    { name:"Coriander",     emoji:"🌿" }, { name:"Green Chilli",  emoji:"🌶️" },
+    { name:"Carrot",        emoji:"🥕" }, { name:"Capsicum",      emoji:"🫑" },
+    { name:"Cabbage",       emoji:"🥦" }, { name:"Cauliflower",   emoji:"🥦" },
+    { name:"Peas",          emoji:"🫛" }, { name:"Radish",        emoji:"🌱" },
+    { name:"Brinjal",       emoji:"🍆" }, { name:"Corn",          emoji:"🌽" },
+    { name:"Mushroom",      emoji:"🍄" },
+    // ── New additions ──
+    { name:"Tori",          emoji:"🥒" }, { name:"Karela",        emoji:"🫛" },
+    { name:"Bhindi",        emoji:"🌿" }, { name:"Petha",         emoji:"🎃" },
+    { name:"Kaddu",         emoji:"🎃" }, { name:"Ghiya",         emoji:"🫙" },
+    { name:"Tinde",         emoji:"🫑" }, { name:"Chaule",        emoji:"🌾" },
+  ],
+  Fruits: [
+    { name:"Apple",         emoji:"🍎" }, { name:"Banana",        emoji:"🍌" },
+    { name:"Mango",         emoji:"🥭" }, { name:"Orange",        emoji:"🍊" },
+    { name:"Grapes",        emoji:"🍇" }, { name:"Watermelon",    emoji:"🍉" },
+    { name:"Papaya",        emoji:"🍈" }, { name:"Guava",         emoji:"🍐" },
+    { name:"Pomegranate",   emoji:"🍓" }, { name:"Lemon",         emoji:"🍋" },
+    { name:"Coconut",       emoji:"🥥" }, { name:"Pineapple",     emoji:"🍍" },
+    { name:"Kiwi",          emoji:"🥝" },
+  ],
+  Salad: [
+    { name:"Cucumber",      emoji:"🥒" }, { name:"Lettuce",       emoji:"🥗" },
+    { name:"Beetroot",      emoji:"❤️"  }, { name:"Mint",          emoji:"🌿" },
+    { name:"Spring Onion",  emoji:"🧅" }, { name:"Cherry Tomato", emoji:"🍒" },
+    { name:"Celery",        emoji:"🌱" }, { name:"Broccoli",      emoji:"🥦" },
+  ],
+};
+
+const EMOJI_MAP = {};
+Object.values(CATEGORIES).flat().forEach(i => { EMOJI_MAP[i.name] = i.emoji; });
+
+function uid()        { return Math.random().toString(36).slice(2,9); }
+function fmt(n)       { return "₹" + Number(n||0).toFixed(2); }
+function shortName(n) { return n.split(" ")[0]; }
+function todayStr()   { return new Date().toISOString().slice(0,10); }
+
+const blankLedger = () => Object.fromEntries(MEMBERS.map(m => [m, { payments:[], bills:[] }]));
+const EMPTY_DATA  = { trips:[], ledger: blankLedger() };
+
+// ─────────────────────────────────────────────────────────────
+//  DB HELPERS  (Supabase REST)
+// ─────────────────────────────────────────────────────────────
+const dbHeaders = {
+  "Content-Type":  "application/json",
+  "apikey":        SUPABASE_ANON,
+  "Authorization": "Bearer " + SUPABASE_ANON,
+};
+
+async function dbLoad() {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/mandi_data?id=eq.${ROW_ID}&select=payload`,
+      { headers: dbHeaders }
+    );
+    if (!r.ok) {
+      const err = await r.text();
+      console.error("DB load error:", r.status, err);
+      return null;
+    }
+    const rows = await r.json();
+    if (rows.length && rows[0].payload) return rows[0].payload;
+  } catch(e) { console.error("DB load exception:", e); }
+  return null;
+}
+
+async function dbSave(data) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/mandi_data`, {
+      method:  "POST",
+      headers: { ...dbHeaders, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body:    JSON.stringify({ id: ROW_ID, payload: data, updated_at: new Date().toISOString() }),
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      console.error("DB save error:", r.status, err);
+    }
+  } catch(e) { console.error("DB save exception:", e); }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  APP ROOT
+// ─────────────────────────────────────────────────────────────
+function App() {
+  const [data,      setDataRaw]  = useState(null);
+  const [view,      setView]     = useState("home");
+  const [selMember, setSelMember]= useState("");
+  const [pinInput,  setPinInput] = useState("");
+  const [pinError,  setPinError] = useState(false);
+  const [toast,     setToast]    = useState(null);
+  const [saving,    setSaving]   = useState(false);
+  const [dbOk,      setDbOk]     = useState(null); // null=checking, true/false
+  const pollRef = useRef(null);
+
+  // ── Load from DB on mount ──
+  useEffect(() => {
+    dbLoad().then(d => {
+      if (d) { setDataRaw(d); setDbOk(true); }
+      else   { setDataRaw(EMPTY_DATA); setDbOk(false); }
+    });
+    // Poll every 10 s so all users see fresh data
+    pollRef.current = setInterval(() => {
+      dbLoad().then(d => { if(d) setDataRaw(d); });
+    }, 10000);
+    return () => clearInterval(pollRef.current);
+  }, []);
+
+  const setData = useCallback((updater) => {
+    setSaving(true);
+    setDataRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      dbSave(next).finally(() => setSaving(false));
+      return next;
+    });
+  }, []);
+
+  function showToast(msg, color="#2d6a4f") {
+    setToast({ msg, color });
+    setTimeout(() => setToast(null), 2800);
+  }
+
+  function getBalance(member) {
+    const l = data?.ledger?.[member];
+    if (!l) return 0;
+    return l.bills.reduce((s,b)=>s+b.amount,0) - l.payments.reduce((s,p)=>s+p.amount,0);
+  }
+
+  function enterAdmin() {
+    if (pinInput === ADMIN_PIN) { setPinError(false); setPinInput(""); setView("admin"); }
+    else setPinError(true);
+  }
+
+  const activeTrip = data?.trips?.find(t => t.status === "open");
+
+  if (!data) return (
+    <div style={{ ...S.root, display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh" }}>
+      <div style={{ textAlign:"center", color:"#2d6a4f" }}>
+        <div style={{ fontSize:56, marginBottom:14 }}>🛒</div>
+        <div style={{ fontWeight:800, fontSize:17 }}>Loading Sabji Mandi…</div>
+        <div style={{ fontSize:12, color:"#999", marginTop:6 }}>Connecting to database</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={S.root}>
+      {/* DB status banner */}
+      {dbOk === false && (
+        <div style={S.dbWarnBar}>
+          ⚠️ Database not connected – data won't be saved across devices.{" "}
+          <a href="https://supabase.com" target="_blank" rel="noreferrer" style={{color:"#fff",fontWeight:900}}>Setup guide ↗</a>
+        </div>
+      )}
+      {saving && <div style={S.savingBar}>💾 Saving…</div>}
+      {toast  && <div style={{ ...S.toast, background:toast.color }}>{toast.msg}</div>}
+
+      {view==="home"     && <HomeScreen     setView={setView} selMember={selMember} setSelMember={setSelMember} getBalance={getBalance} />}
+      {view==="customer" && <CustomerScreen data={data} setData={setData} activeTrip={activeTrip} member={selMember} setView={setView} showToast={showToast} getBalance={getBalance} />}
+      {view==="adminPin" && <PinScreen      pinInput={pinInput} setPinInput={setPinInput} pinError={pinError} enterAdmin={enterAdmin} setView={setView} />}
+      {view==="admin"    && <AdminScreen    data={data} setData={setData} setView={setView} showToast={showToast} getBalance={getBalance} dbOk={dbOk} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  HOME
+// ─────────────────────────────────────────────────────────────
+function HomeScreen({ setView, selMember, setSelMember, getBalance }) {
+  return (
+    <div style={S.screen}>
+      <div style={S.homeBg}/>
+      <div style={S.homeContent}>
+        <div style={{ fontSize:64, marginBottom:4 }}>🛒</div>
+        <h1 style={S.homeTitle}>Sabji Mandi</h1>
+        <p style={S.homeSub}>ਤਾਜ਼ਾ ਸਬਜ਼ੀਆਂ · ਸਸਤੇ ਭਾਅ · ਮਿਲ ਕੇ</p>
+
+        <div style={S.card}>
+          <p style={S.label}>ਆਪਣਾ ਨਾਮ ਚੁਣੋ:</p>
+          {MEMBERS.map(m => {
+            const bal = getBalance(m), sel = selMember===m;
+            return (
+              <button key={m} onClick={()=>setSelMember(m)} style={{
+                ...S.memberBtn,
+                background: sel?"#2d6a4f":"#f0faf4",
+                border:`2px solid ${sel?"#2d6a4f":"#d8eadf"}`,
+                color: sel?"#fff":"#1b1b1b",
+              }}>
+                <span style={{fontWeight:700,fontSize:14}}>👤 {m}</span>
+                <span style={{fontSize:12,fontWeight:700,color:sel?"rgba(255,255,255,0.85)":bal>0?"#e63946":"#2d6a4f"}}>
+                  {bal>0?`Owes ${fmt(bal)}`:bal<0?`Credit ${fmt(-bal)}`:"Settled ✓"}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            style={{...S.btn,...S.btnGreen,marginTop:14,width:"100%",opacity:selMember?1:0.4}}
+            disabled={!selMember} onClick={()=>setView("customer")}>
+            🥦 My Orders & Account
+          </button>
+        </div>
+        <button style={{...S.btn,...S.btnDark,marginTop:14}} onClick={()=>setView("adminPin")}>
+          🔐 Admin Panel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PIN
+// ─────────────────────────────────────────────────────────────
+function PinScreen({ pinInput, setPinInput, pinError, enterAdmin, setView }) {
+  return (
+    <div style={{...S.screen,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{...S.card,maxWidth:300,width:"90%"}}>
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:44}}>🔐</div>
+          <h2 style={{margin:"8px 0 4px",fontSize:20}}>Admin Access</h2>
+          <p style={{color:"#888",fontSize:13,margin:0}}>Enter 4-digit PIN</p>
+        </div>
+        <input type="password" maxLength={4}
+          style={{...S.input,letterSpacing:10,fontSize:24,textAlign:"center"}}
+          value={pinInput} onChange={e=>setPinInput(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&enterAdmin()} placeholder="••••"/>
+        {pinError && <p style={{color:"#e63946",fontSize:13,textAlign:"center"}}>Wrong PIN!</p>}
+        <div style={{display:"flex",gap:10,marginTop:14}}>
+          <button style={{...S.btn,...S.btnGhost,flex:1}} onClick={()=>setView("home")}>Back</button>
+          <button style={{...S.btn,...S.btnGreen,flex:1}} onClick={enterAdmin}>Enter</button>
+        </div>
+        <p style={{fontSize:11,color:"#ccc",marginTop:10,textAlign:"center"}}>Demo PIN: 1234</p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CUSTOMER
+// ─────────────────────────────────────────────────────────────
+function CustomerScreen({ data, setData, activeTrip, member, setView, showToast, getBalance }) {
+  const [tab,       setTab]      = useState("order");
+  const [myOrders,  setMyOrders] = useState({});
+  const [submitted, setSubmitted]= useState(false);
+  const [activeCat, setActiveCat]= useState("Vegetables");
+
+  const ledger  = data.ledger?.[member] || { payments:[], bills:[] };
+  const balance = getBalance(member);
+  const existingOrder = activeTrip?.orders?.find(o=>o.member===member);
+
+  useEffect(()=>{
+    if (existingOrder) {
+      const map={};
+      existingOrder.items.forEach(i=>{ map[i.name]=i.qty; });
+      setMyOrders(map); setSubmitted(true);
+    } else { setMyOrders({}); setSubmitted(false); }
+  }, [activeTrip?.id, member]);
+
+  function setQty(name,val){ setMyOrders(o=>({...o,[name]:Math.max(0,val)})); }
+
+  function submitOrder() {
+    const items = Object.entries(myOrders).filter(([,q])=>Number(q)>0).map(([name,qty])=>({name,qty:Number(qty)}));
+    if (!items.length) return showToast("ਕੋਈ ਚੀਜ਼ ਚੁਣੋ!","#e63946");
+    setData(s=>{
+      const trips = s.trips.map(t=>{
+        if (t.id!==activeTrip.id) return t;
+        const orders = t.orders.filter(o=>o.member!==member);
+        return {...t, orders:[...orders,{id:uid(),member,items}]};
+      });
+      return {...s,trips};
+    });
+    setSubmitted(true); showToast("✅ Order placed!");
+  }
+
+  const totalBilled = ledger.bills.reduce((s,b)=>s+b.amount,0);
+  const totalPaid   = ledger.payments.reduce((s,p)=>s+p.amount,0);
+
+  return (
+    <div style={S.screen}>
+      <Header title={shortName(member)} subtitle={member} onBack={()=>setView("home")}/>
+
+      <div style={{
+        ...S.balanceBanner,
+        background: balance>0?"linear-gradient(90deg,#c1121f,#e63946)":
+                    balance<0?"linear-gradient(90deg,#1a4731,#2d6a4f)":
+                              "linear-gradient(90deg,#444,#666)",
+      }}>
+        <div>
+          <div style={{fontSize:11,opacity:0.8,marginBottom:2}}>Your Balance</div>
+          <div style={{fontSize:20,fontWeight:900}}>
+            {balance>0?`You owe ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"All Clear ✓"}
+          </div>
+        </div>
+        <div style={{fontSize:36}}>{balance>0?"📤":balance<0?"💰":"✅"}</div>
+      </div>
+
+      <div style={S.tabs}>
+        {[["order","🛍 Order"],["account","📒 Account"]].map(([t,label])=>(
+          <button key={t} style={{...S.tab,...(tab===t?S.tabActive:{})}} onClick={()=>setTab(t)}>{label}</button>
+        ))}
+      </div>
+
+      {tab==="order" && (
+        <div style={{padding:"0 14px 100px"}}>
+          {!activeTrip ? (
+            <div style={S.emptyBox}>
+              <div style={{fontSize:52}}>🛒</div>
+              <p style={S.emptyText}>ਕੋਈ ਟ੍ਰਿਪ ਨਹੀਂ ਹੈ।<br/>Admin ਟ੍ਰਿਪ ਬਣਾਵੇਗਾ।</p>
+            </div>
+          ):(
+            <>
+              <div style={S.tripBanner}>
+                <span>📅 Trip: <b>{activeTrip.date}</b></span>
+                <span style={{...S.badge,background:"#2d6a4f"}}>Open</span>
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
+                {Object.keys(CATEGORIES).map(cat=>(
+                  <button key={cat} onClick={()=>setActiveCat(cat)} style={{
+                    ...S.pill, whiteSpace:"nowrap",
+                    background:activeCat===cat?"#2d6a4f":"#e8f5e9",
+                    color:activeCat===cat?"#fff":"#2d6a4f",
+                  }}>
+                    {cat==="Vegetables"?"🥦":cat==="Fruits"?"🍎":"🥗"} {cat}
+                  </button>
+                ))}
+              </div>
+
+              {CATEGORIES[activeCat].map(item=>{
+                const qty=Number(myOrders[item.name]||0);
+                return (
+                  <div key={item.name} style={S.itemRow}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:24}}>{item.emoji}</span>
+                      <span style={S.itemName}>{item.name}</span>
+                    </div>
+                    <div style={S.qtyControl}>
+                      <button style={{...S.qtyBtn,opacity:qty===0?0.3:1}} onClick={()=>setQty(item.name,qty-0.5)}>−</button>
+                      <span style={S.qtyVal}>{qty>0?qty:"—"}</span>
+                      <button style={S.qtyBtn} onClick={()=>setQty(item.name,qty+0.5)}>+</button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {Object.values(myOrders).some(q=>q>0) && (
+                <div style={{...S.summaryCard,marginTop:14}}>
+                  <p style={{...S.label,marginTop:0}}>Your Order:</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {Object.entries(myOrders).filter(([,q])=>q>0).map(([name,qty])=>(
+                      <span key={name} style={S.itemTag}>{EMOJI_MAP[name]} {name} × {qty}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={S.stickyBottom}>
+                <button style={{...S.btn,...S.btnGreen,width:"100%"}} onClick={submitOrder}>
+                  {submitted?"✏️ Update Order":"✅ Place Order"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {tab==="account" && (
+        <div style={{padding:"0 14px 40px"}}>
+          <div style={{...S.summaryCard,marginTop:14}}>
+            <div style={S.summaryRow}><span>Total Billed</span><b style={{color:"#e63946"}}>{fmt(totalBilled)}</b></div>
+            <div style={S.summaryRow}><span>Total Paid</span><b style={{color:"#2d6a4f"}}>{fmt(totalPaid)}</b></div>
+            <div style={{...S.summaryRow,borderTop:"1.5px solid #e8f5e9",paddingTop:10,marginTop:2}}>
+              <span style={{fontWeight:800}}>Net Balance</span>
+              <b style={{fontSize:17,color:balance>0?"#e63946":"#2d6a4f"}}>
+                {balance>0?`Owes ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"Settled ✓"}
+              </b>
+            </div>
+          </div>
+
+          <p style={S.label}>🧾 Trip Bills</p>
+          {ledger.bills.length===0
+            ? <div style={S.emptyBox}><p style={S.emptyText}>No bills yet.</p></div>
+            : [...ledger.bills].reverse().map((bill,idx)=>(
+              <div key={idx} style={{...S.histCard,borderLeft:"3px solid #e63946"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <b style={{fontSize:14}}>🗓 {bill.date}</b>
+                    <div style={{fontSize:11,color:"#888",marginTop:2}}>Mandi Trip</div>
+                  </div>
+                  <span style={{...S.amountBadge,background:"#e63946"}}>{fmt(bill.amount)}</span>
+                </div>
+                {bill.items?.length>0 && (
+                  <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
+                    {bill.items.map(i=>(
+                      <span key={i.name} style={S.itemTag}>{EMOJI_MAP[i.name]||"🛒"} {i.name} × {i.qty}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          }
+
+          <p style={S.label}>💵 Payments Made</p>
+          {ledger.payments.length===0
+            ? <div style={S.emptyBox}><p style={S.emptyText}>No payments yet.</p></div>
+            : [...ledger.payments].reverse().map((pay,idx)=>(
+              <div key={idx} style={{...S.histCard,borderLeft:"3px solid #2d6a4f"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <b style={{fontSize:14}}>💰 {pay.note||"Payment"}</b>
+                    <div style={{fontSize:11,color:"#888",marginTop:2}}>{pay.date}</div>
+                  </div>
+                  <span style={{...S.amountBadge,background:"#2d6a4f"}}>+{fmt(pay.amount)}</span>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ADMIN
+// ─────────────────────────────────────────────────────────────
+function AdminScreen({ data, setData, setView, showToast, getBalance, dbOk }) {
+  const [tab,        setTab]       = useState("trips");
+  const [dbTestMsg,  setDbTestMsg] = useState(null);
+
+  async function testDB() {
+    setDbTestMsg("Testing...");
+    try {
+      // Test write
+      const w = await fetch(`${SUPABASE_URL}/rest/v1/mandi_data`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON,
+          "Authorization": "Bearer " + SUPABASE_ANON,
+          "Prefer": "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify({ id: "test-ping", payload: { ping: true }, updated_at: new Date().toISOString() }),
+      });
+      if (!w.ok) {
+        const e = await w.text();
+        setDbTestMsg("❌ Write failed: " + w.status + " — " + e);
+        return;
+      }
+      // Test read
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/mandi_data?id=eq.test-ping&select=id`, {
+        headers: { "apikey": SUPABASE_ANON, "Authorization": "Bearer " + SUPABASE_ANON },
+      });
+      const rows = await r.json();
+      if (rows.length) setDbTestMsg("✅ Database connected! Read & write working.");
+      else setDbTestMsg("⚠️ Write OK but read returned nothing. Check RLS.");
+    } catch(e) {
+      setDbTestMsg("❌ Network error: " + e.message);
+    }
+  }
+  const [newDate,    setNewDate]   = useState(todayStr());
+  const [selTripId,  setSelTripId] = useState(null);
+  const [purchCat,   setPurchCat]  = useState("Vegetables");
+  const [purchItem,  setPurchItem] = useState("");
+  const [purchQty,   setPurchQty]  = useState("");
+  const [purchPrice, setPurchPrice]= useState("");
+  const [travelExp,  setTravelExp] = useState("");
+  const [payMember,  setPayMember] = useState("");
+  const [payAmount,  setPayAmount] = useState("");
+  const [payNote,    setPayNote]   = useState("");
+
+  const selTrip = data.trips.find(t=>t.id===selTripId) || data.trips[0];
+
+  // ── Merged order totals across all members ──
+  function getMergedOrders(trip) {
+    if (!trip || !trip.orders.length) return [];
+    const totals = {};
+    trip.orders.forEach(order => {
+      order.items.forEach(i => {
+        if (!totals[i.name]) totals[i.name] = { name:i.name, total:0, byMember:[] };
+        totals[i.name].total += Number(i.qty);
+        totals[i.name].byMember.push({ member: shortName(order.member), qty: i.qty });
+      });
+    });
+    return Object.values(totals).sort((a,b)=>b.total-a.total);
+  }
+
+  function createTrip() {
+    if (!newDate) return showToast("Date ਚੁਣੋ!","#e63946");
+    const trip = {id:uid(),date:newDate,status:"open",items:[],orders:[],travelExpense:0};
+    setData(s=>({...s,trips:[trip,...s.trips]}));
+    setSelTripId(trip.id);
+    showToast("🛒 Trip ਬਣ ਗਿਆ!");
+  }
+
+  function closeTrip(id) {
+    setData(s=>({...s,trips:s.trips.map(t=>t.id===id?{...t,status:"closed"}:t)}));
+    showToast("Trip closed.");
+  }
+
+  function addItem() {
+    if (!purchItem||!purchQty||!purchPrice) return showToast("ਸਾਰੇ ਖੇਤਰ ਭਰੋ!","#e63946");
+    const item={id:uid(),name:purchItem,qty:Number(purchQty),totalCost:Number(purchPrice)};
+    setData(s=>({...s,trips:s.trips.map(t=>t.id===selTrip?.id?{...t,items:[...t.items,item]}:t)}));
+    setPurchItem(""); setPurchQty(""); setPurchPrice("");
+    showToast("✅ Item added!");
+  }
+
+  function removeItem(itemId) {
+    setData(s=>({...s,trips:s.trips.map(t=>t.id===selTrip?.id?{...t,items:t.items.filter(i=>i.id!==itemId)}:t)}));
+  }
+
+  function saveTravelExp() {
+    setData(s=>({...s,trips:s.trips.map(t=>t.id===selTrip?.id?{...t,travelExpense:Number(travelExp)}:t)}));
+    showToast("Travel expense saved!");
+  }
+
+  function calcSplit(trip) {
+    if (!trip||!trip.orders.length) return {};
+    const share=(trip.travelExpense||0)/trip.orders.length;
+    const res={};
+    trip.orders.forEach(order=>{
+      let cost=share;
+      order.items.forEach(oi=>{
+        const p=trip.items.find(pi=>pi.name===oi.name);
+        if(p&&p.qty>0) cost+=(p.totalCost/p.qty)*oi.qty;
+      });
+      res[order.member]={amount:cost,items:order.items};
+    });
+    return res;
+  }
+
+  function settleBills() {
+    if (!selTrip) return;
+    const split=calcSplit(selTrip);
+    if (!Object.keys(split).length) return showToast("No orders to settle!","#e63946");
+    setData(s=>{
+      const newLedger={...s.ledger};
+      Object.entries(split).forEach(([member,d])=>{
+        newLedger[member]={
+          ...newLedger[member],
+          bills:[...newLedger[member].bills,{tripId:selTrip.id,date:selTrip.date,amount:d.amount,items:d.items}],
+        };
+      });
+      return {...s,ledger:newLedger,trips:s.trips.map(t=>t.id===selTrip.id?{...t,status:"settled"}:t)};
+    });
+    showToast("✅ Bills sent to all members!");
+  }
+
+  function recordPayment() {
+    if (!payMember||!payAmount) return showToast("Member & amount ਭਰੋ!","#e63946");
+    const pay={id:uid(),date:todayStr(),amount:Number(payAmount),note:payNote||"Payment received"};
+    setData(s=>({...s,ledger:{...s.ledger,[payMember]:{...s.ledger[payMember],payments:[...s.ledger[payMember].payments,pay]}}}));
+    setPayAmount(""); setPayNote("");
+    showToast(`✅ ${fmt(Number(payAmount))} recorded for ${shortName(payMember)}`);
+  }
+
+  const splitData     = selTrip ? calcSplit(selTrip) : {};
+  const totalItemCost = selTrip?.items.reduce((s,i)=>s+i.totalCost,0)||0;
+  const totalCost     = totalItemCost+(selTrip?.travelExpense||0);
+  const mergedOrders  = getMergedOrders(selTrip);
+
+  return (
+    <div style={S.screen}>
+      <Header title="Admin Panel" subtitle="Mandi Manager 🔐" onBack={()=>setView("home")}/>
+
+      <div style={{...S.tabs,overflowX:"auto"}}>
+        {[["trips","🗓 Trips"],["summary","📊 Summary"],["purchase","🛍 Buy"],["split","💰 Split"],["payments","💵 Pay"]].map(([t,label])=>(
+          <button key={t} style={{...S.tab,...(tab===t?S.tabActive:{})}} onClick={()=>setTab(t)}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{padding:"0 14px 60px"}}>
+
+        {/* ── DB STATUS ── */}
+        {tab==="trips" && (
+          <div style={{ background: dbOk===false?"#fdecea":dbOk===true?"#e8f5e9":"#fff9e6", borderRadius:12, padding:"12px 14px", marginTop:14, marginBottom:0 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <b style={{ fontSize:13 }}>
+                  {dbOk===true?"✅ Database Connected":dbOk===false?"❌ Database Not Connected":"⏳ Checking DB…"}
+                </b>
+                <div style={{ fontSize:11, color:"#666", marginTop:2 }}>
+                  {SUPABASE_URL}
+                </div>
+              </div>
+              <button style={{...S.btn, ...S.btnDark, padding:"6px 12px", fontSize:12}} onClick={testDB}>
+                Test
+              </button>
+            </div>
+            {dbTestMsg && (
+              <div style={{ marginTop:8, fontSize:12, fontWeight:700, color: dbTestMsg.startsWith("✅")?"#2d6a4f":"#e63946" }}>
+                {dbTestMsg}
+              </div>
+            )}
+            {dbOk===false && (
+              <div style={{ marginTop:8, fontSize:12, color:"#888", lineHeight:1.6 }}>
+                Fix: Go to Supabase → Table Editor → mandi_data → RLS → Disable it.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── TRIPS ── */}
+        {tab==="trips" && (
+          <>
+            <p style={S.label}>New Trip</p>
+            <div style={{display:"flex",gap:8}}>
+              <input type="date" style={{...S.input,flex:1}} value={newDate} onChange={e=>setNewDate(e.target.value)}/>
+              <button style={{...S.btn,...S.btnGreen}} onClick={createTrip}>+ Trip</button>
+            </div>
+            {data.trips.length===0 && <div style={S.emptyBox}><p style={S.emptyText}>No trips yet.</p></div>}
+            {data.trips.map(trip=>(
+              <div key={trip.id}
+                style={{...S.tripCard,border:`2px solid ${selTrip?.id===trip.id?"#2d6a4f":"transparent"}`}}
+                onClick={()=>setSelTripId(trip.id)}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <b>📅 {trip.date}</b>
+                    <div style={{fontSize:12,color:"#888",marginTop:2}}>{trip.orders.length} orders · {trip.items.length} items bought</div>
+                  </div>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <span style={{...S.badge,background:trip.status==="open"?"#2d6a4f":trip.status==="settled"?"#457b9d":"#888"}}>
+                      {trip.status}
+                    </span>
+                    {trip.status==="open" && (
+                      <button style={{...S.btn,...S.btnDark,padding:"4px 10px",fontSize:11}}
+                        onClick={e=>{e.stopPropagation();closeTrip(trip.id);}}>Close</button>
+                    )}
+                  </div>
+                </div>
+                {trip.orders.map(o=>(
+                  <div key={o.member} style={{fontSize:12,color:"#555",marginTop:4}}>
+                    <b>{shortName(o.member)}</b>: {o.items.map(i=>`${EMOJI_MAP[i.name]||""}${i.name}(${i.qty})`).join(", ")}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* ── SUMMARY (Merged Orders) ── */}
+        {tab==="summary" && (
+          <>
+            {!selTrip
+              ? <div style={S.emptyBox}><p style={S.emptyText}>Trips tab ਤੋਂ trip ਚੁਣੋ।</p></div>
+              : <>
+                <div style={S.tripBanner}>
+                  <span>📅 <b>{selTrip.date}</b></span>
+                  <span style={{...S.badge,background:selTrip.status==="open"?"#2d6a4f":"#888"}}>{selTrip.status}</span>
+                </div>
+
+                <div style={{...S.summaryCard,background:"linear-gradient(135deg,#1a4731,#2d6a4f)",color:"#fff"}}>
+                  <div style={{fontSize:13,opacity:0.8,marginBottom:4}}>Total Orders Received</div>
+                  <div style={{fontSize:28,fontWeight:900}}>{selTrip.orders.length} <span style={{fontSize:14,fontWeight:400}}>members</span></div>
+                  <div style={{fontSize:13,opacity:0.8,marginTop:4}}>{mergedOrders.length} unique items ordered</div>
+                </div>
+
+                {mergedOrders.length===0
+                  ? <div style={S.emptyBox}><p style={S.emptyText}>No orders yet for this trip.</p></div>
+                  : <>
+                    <p style={S.label}>🛒 What to Buy at Mandi</p>
+                    <p style={{fontSize:12,color:"#888",marginTop:-6,marginBottom:10}}>Sorted by total quantity needed</p>
+                    {mergedOrders.map(item=>(
+                      <div key={item.name} style={S.mergeRow}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+                          <span style={{fontSize:26,minWidth:32,textAlign:"center"}}>{EMOJI_MAP[item.name]||"🛒"}</span>
+                          <div style={{flex:1}}>
+                            <div style={{fontWeight:800,fontSize:14}}>{item.name}</div>
+                            {/* Per-member breakdown */}
+                            <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
+                              {item.byMember.map(bm=>(
+                                <span key={bm.member} style={S.memberTag}>{bm.member}: {bm.qty}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={S.totalQtyBadge}>
+                          {item.total} <span style={{fontSize:10,fontWeight:600}}>kg</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Category-wise breakdown */}
+                    <p style={{...S.label,marginTop:24}}>By Category</p>
+                    {Object.entries(CATEGORIES).map(([cat,items])=>{
+                      const catItems = mergedOrders.filter(o=>items.some(i=>i.name===o.name));
+                      if (!catItems.length) return null;
+                      const catTotal = catItems.reduce((s,i)=>s+i.total,0);
+                      return (
+                        <div key={cat} style={{...S.card,marginBottom:10,padding:14}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                            <b style={{fontSize:14}}>
+                              {cat==="Vegetables"?"🥦":cat==="Fruits"?"🍎":"🥗"} {cat}
+                            </b>
+                            <span style={{fontSize:12,color:"#888"}}>{catItems.length} items · {catTotal} kg total</span>
+                          </div>
+                          {catItems.map(i=>(
+                            <div key={i.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                              <span style={{fontSize:13}}>{EMOJI_MAP[i.name]||"🛒"} {i.name}</span>
+                              <span style={{fontWeight:800,color:"#2d6a4f",fontSize:14}}>{i.total} kg</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </>
+                }
+              </>
+            }
+          </>
+        )}
+
+        {/* ── PURCHASE ── */}
+        {tab==="purchase" && (
+          <>
+            {!selTrip
+              ? <div style={S.emptyBox}><p style={S.emptyText}>Trips tab ਤੋਂ trip ਚੁਣੋ।</p></div>
+              : <>
+                <div style={S.tripBanner}>
+                  <span>📅 <b>{selTrip.date}</b></span>
+                  <span style={{...S.badge,background:selTrip.status==="open"?"#2d6a4f":"#888"}}>{selTrip.status}</span>
+                </div>
+
+                <p style={S.label}>Category</p>
+                <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+                  {Object.keys(CATEGORIES).map(cat=>(
+                    <button key={cat} onClick={()=>{setPurchCat(cat);setPurchItem("");}}
+                      style={{...S.pill,background:purchCat===cat?"#2d6a4f":"#e8f5e9",color:purchCat===cat?"#fff":"#2d6a4f"}}>
+                      {cat==="Vegetables"?"🥦":cat==="Fruits"?"🍎":"🥗"} {cat}
+                    </button>
+                  ))}
+                </div>
+
+                <select style={S.select} value={purchItem} onChange={e=>setPurchItem(e.target.value)}>
+                  <option value="">— Item ਚੁਣੋ —</option>
+                  {CATEGORIES[purchCat].map(i=><option key={i.name} value={i.name}>{i.emoji} {i.name}</option>)}
+                </select>
+
+                <div style={{display:"flex",gap:8,marginTop:8}}>
+                  <input style={{...S.input,flex:1}} placeholder="Qty kg/pcs" type="number" value={purchQty} onChange={e=>setPurchQty(e.target.value)}/>
+                  <input style={{...S.input,flex:1}} placeholder="Total ₹ paid" type="number" value={purchPrice} onChange={e=>setPurchPrice(e.target.value)}/>
+                </div>
+                <button style={{...S.btn,...S.btnGreen,marginTop:8,width:"100%"}} onClick={addItem}>+ Add Item</button>
+
+                {selTrip.items.length>0 && (
+                  <>
+                    <p style={{...S.label,marginTop:18}}>Purchased Items</p>
+                    {selTrip.items.map(item=>(
+                      <div key={item.id} style={S.purchaseRow}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:22}}>{EMOJI_MAP[item.name]||"🛒"}</span>
+                          <div><b style={{fontSize:13}}>{item.name}</b><div style={{fontSize:11,color:"#888"}}>{item.qty} kg/pcs</div></div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <b style={{color:"#2d6a4f"}}>{fmt(item.totalCost)}</b>
+                          <button style={S.deleteBtn} onClick={()=>removeItem(item.id)}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={S.totalRow}><span>Items Total</span><b>{fmt(totalItemCost)}</b></div>
+                  </>
+                )}
+
+                <p style={{...S.label,marginTop:18}}>Travel Expense</p>
+                <div style={{display:"flex",gap:8}}>
+                  <input style={{...S.input,flex:1}} placeholder="₹ petrol / auto" type="number" value={travelExp} onChange={e=>setTravelExp(e.target.value)}/>
+                  <button style={{...S.btn,...S.btnDark}} onClick={saveTravelExp}>Save</button>
+                </div>
+                {selTrip.travelExpense>0 && (
+                  <p style={{fontSize:13,color:"#2d6a4f",marginTop:6}}>Travel: {fmt(selTrip.travelExpense)} · splits equally</p>
+                )}
+              </>
+            }
+          </>
+        )}
+
+        {/* ── SPLIT ── */}
+        {tab==="split" && (
+          <>
+            {!selTrip
+              ? <div style={S.emptyBox}><p style={S.emptyText}>Trips tab ਤੋਂ trip ਚੁਣੋ।</p></div>
+              : <>
+                <div style={S.tripBanner}>
+                  <span>📅 <b>{selTrip.date}</b></span>
+                  <span style={{...S.badge,background:selTrip.status==="settled"?"#457b9d":"#2d6a4f"}}>{selTrip.status}</span>
+                </div>
+                <div style={S.summaryCard}>
+                  <div style={S.summaryRow}><span>Items Cost</span><b>{fmt(totalItemCost)}</b></div>
+                  <div style={S.summaryRow}><span>Travel</span><b>{fmt(selTrip.travelExpense)}</b></div>
+                  <div style={{...S.summaryRow,borderTop:"1px solid #eee",paddingTop:8,marginTop:2}}>
+                    <span style={{fontWeight:800}}>Grand Total</span>
+                    <b style={{color:"#2d6a4f",fontSize:18}}>{fmt(totalCost)}</b>
+                  </div>
+                </div>
+
+                <p style={S.label}>Per Member Bill</p>
+                {Object.entries(splitData).map(([member,d])=>(
+                  <div key={member} style={S.billCard}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <b style={{fontSize:14}}>👤 {member}</b>
+                      <span style={S.amountBadge}>{fmt(d.amount)}</span>
+                    </div>
+                    <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
+                      {d.items.map(i=>(
+                        <span key={i.name} style={S.itemTag}>{EMOJI_MAP[i.name]||"🛒"} {i.name} × {i.qty}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {selTrip.orders.length===0 && <div style={S.emptyBox}><p style={S.emptyText}>No orders yet.</p></div>}
+
+                {selTrip.status!=="settled" && selTrip.orders.length>0 && (
+                  <button style={{...S.btn,...S.btnGreen,width:"100%",marginTop:14,fontSize:15}} onClick={settleBills}>
+                    ✅ Finalise & Send Bills to All
+                  </button>
+                )}
+                {selTrip.status==="settled" && (
+                  <div style={{textAlign:"center",padding:16,color:"#457b9d",fontWeight:800,fontSize:15}}>
+                    ✅ Bills already sent to all members
+                  </div>
+                )}
+              </>
+            }
+          </>
+        )}
+
+        {/* ── PAYMENTS ── */}
+        {tab==="payments" && (
+          <>
+            <p style={S.label}>Record Payment Received</p>
+            <select style={S.select} value={payMember} onChange={e=>setPayMember(e.target.value)}>
+              <option value="">— Member ਚੁਣੋ —</option>
+              {MEMBERS.map(m=><option key={m} value={m}>{m} · owes {fmt(getBalance(m))}</option>)}
+            </select>
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+              <input style={{...S.input,flex:1}} placeholder="Amount ₹" type="number" value={payAmount} onChange={e=>setPayAmount(e.target.value)}/>
+              <input style={{...S.input,flex:1}} placeholder="Note (opt)" value={payNote} onChange={e=>setPayNote(e.target.value)}/>
+            </div>
+            <button style={{...S.btn,...S.btnGreen,marginTop:10,width:"100%"}} onClick={recordPayment}>
+              💵 Record Payment
+            </button>
+
+            <p style={{...S.label,marginTop:24}}>All Members Balance</p>
+            {MEMBERS.map(m=>{
+              const bal=getBalance(m), l=data.ledger[m];
+              return (
+                <div key={m} style={S.memberBalCard}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <b style={{fontSize:14}}>👤 {m}</b>
+                      <div style={{fontSize:11,color:"#888",marginTop:2}}>
+                        Billed: {fmt(l.bills.reduce((s,b)=>s+b.amount,0))} · Paid: {fmt(l.payments.reduce((s,p)=>s+p.amount,0))}
+                      </div>
+                    </div>
+                    <span style={{...S.amountBadge,fontSize:13,background:bal>0?"#e63946":bal<0?"#2d6a4f":"#888"}}>
+                      {bal>0?`Owes ${fmt(bal)}`:bal<0?`Cr ${fmt(-bal)}`:"✓ Clear"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Header({ title, subtitle, onBack }) {
+  return (
+    <div style={S.header}>
+      <button style={S.backBtn} onClick={onBack}>←</button>
+      <div style={{textAlign:"center"}}>
+        <div style={S.headerTitle}>{title}</div>
+        {subtitle && <div style={S.headerSub}>{subtitle}</div>}
+      </div>
+      <div style={{width:40}}/>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  STYLES
+// ─────────────────────────────────────────────────────────────
+const S = {
+  root:          { fontFamily:"'Nunito','Segoe UI',sans-serif", background:"#f2f7f3", minHeight:"100vh", maxWidth:480, margin:"0 auto" },
+  screen:        { minHeight:"100vh", background:"#f2f7f3" },
+  homeBg:        { position:"absolute", top:0, left:0, right:0, height:295, background:"linear-gradient(135deg,#1a4731 0%,#2d6a4f 50%,#52b788 100%)", borderRadius:"0 0 48px 48px" },
+  homeContent:   { position:"relative", display:"flex", flexDirection:"column", alignItems:"center", padding:"44px 20px 40px" },
+  homeTitle:     { fontSize:34, fontWeight:900, color:"#fff", margin:0, letterSpacing:-1 },
+  homeSub:       { color:"rgba(255,255,255,0.8)", fontSize:13, marginTop:4, marginBottom:26 },
+  card:          { background:"#fff", borderRadius:22, padding:20, boxShadow:"0 6px 32px rgba(45,106,79,0.13)", width:"100%", boxSizing:"border-box" },
+  memberBtn:     { display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderRadius:12, cursor:"pointer", fontFamily:"inherit", width:"100%", marginBottom:8, boxSizing:"border-box" },
+  header:        { display:"flex", alignItems:"center", justifyContent:"space-between", background:"#1a4731", padding:"14px 16px", boxShadow:"0 2px 16px rgba(26,71,49,0.3)" },
+  headerTitle:   { color:"#fff", fontWeight:800, fontSize:16 },
+  headerSub:     { color:"rgba(255,255,255,0.7)", fontSize:11 },
+  backBtn:       { background:"rgba(255,255,255,0.12)", border:"none", color:"#fff", borderRadius:10, padding:"7px 14px", fontSize:16, cursor:"pointer", fontFamily:"inherit" },
+  balanceBanner: { display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 20px", color:"#fff" },
+  tabs:          { display:"flex", background:"#fff", borderBottom:"1px solid #e8f0e8", position:"sticky", top:0, zIndex:10 },
+  tab:           { flex:1, padding:"11px 4px", border:"none", background:"none", fontSize:11, fontWeight:700, color:"#999", cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" },
+  tabActive:     { color:"#2d6a4f", borderBottom:"2.5px solid #2d6a4f" },
+  input:         { width:"100%", padding:"11px 14px", borderRadius:12, border:"1.5px solid #d8eadf", fontSize:14, background:"#f8fdf8", boxSizing:"border-box", outline:"none", fontFamily:"inherit" },
+  select:        { width:"100%", padding:"11px 14px", borderRadius:12, border:"1.5px solid #d8eadf", fontSize:14, background:"#f8fdf8", boxSizing:"border-box", fontFamily:"inherit" },
+  pill:          { padding:"7px 12px", borderRadius:20, border:"none", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+  btn:           { padding:"12px 20px", borderRadius:13, border:"none", fontWeight:800, fontSize:14, cursor:"pointer", fontFamily:"inherit" },
+  btnGreen:      { background:"#2d6a4f", color:"#fff" },
+  btnDark:       { background:"#1a1a1a", color:"#fff" },
+  btnGhost:      { background:"#eee", color:"#333" },
+  itemRow:       { display:"flex", justifyContent:"space-between", alignItems:"center", background:"#fff", borderRadius:12, padding:"10px 14px", marginBottom:6, boxShadow:"0 1px 4px rgba(0,0,0,0.05)" },
+  itemName:      { fontSize:14, fontWeight:700, color:"#222" },
+  qtyControl:    { display:"flex", alignItems:"center", gap:8 },
+  qtyBtn:        { width:30, height:30, borderRadius:9, border:"none", background:"#e8f5e9", color:"#2d6a4f", fontSize:20, fontWeight:800, cursor:"pointer", lineHeight:"30px", textAlign:"center", fontFamily:"inherit" },
+  qtyVal:        { fontSize:15, fontWeight:800, minWidth:30, textAlign:"center", color:"#1a4731" },
+  tripBanner:    { display:"flex", justifyContent:"space-between", alignItems:"center", background:"#e8f5e9", borderRadius:12, padding:"10px 14px", marginBottom:12, marginTop:12 },
+  badge:         { color:"#fff", borderRadius:8, padding:"3px 10px", fontSize:11, fontWeight:800 },
+  tripCard:      { background:"#fff", borderRadius:14, padding:14, marginBottom:10, boxShadow:"0 1px 6px rgba(0,0,0,0.06)", cursor:"pointer" },
+  purchaseRow:   { display:"flex", justifyContent:"space-between", alignItems:"center", background:"#f8fdf8", borderRadius:10, padding:"10px 12px", marginBottom:6, border:"1px solid #e0f0e6" },
+  deleteBtn:     { background:"#fdecea", border:"none", color:"#e63946", borderRadius:8, width:26, height:26, cursor:"pointer", fontSize:12, fontFamily:"inherit" },
+  totalRow:      { display:"flex", justifyContent:"space-between", padding:"10px 12px", background:"#e8f5e9", borderRadius:10, marginTop:6, fontWeight:800 },
+  summaryCard:   { background:"#fff", borderRadius:16, padding:16, boxShadow:"0 2px 12px rgba(0,0,0,0.07)", marginBottom:14 },
+  summaryRow:    { display:"flex", justifyContent:"space-between", paddingBottom:8, fontSize:14 },
+  billCard:      { background:"#fff", borderRadius:14, padding:14, marginBottom:10, boxShadow:"0 1px 6px rgba(0,0,0,0.07)" },
+  memberBalCard: { background:"#fff", borderRadius:14, padding:14, marginBottom:8, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" },
+  amountBadge:   { color:"#fff", borderRadius:10, padding:"5px 12px", fontWeight:800, fontSize:14 },
+  itemTag:       { background:"#e8f5e9", color:"#1a4731", borderRadius:8, padding:"3px 8px", fontSize:11, fontWeight:700 },
+  histCard:      { background:"#fff", borderRadius:14, padding:14, marginBottom:8, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" },
+  label:         { fontSize:13, fontWeight:800, color:"#555", marginBottom:8, marginTop:16, display:"block" },
+  stickyBottom:  { position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, padding:"12px 16px", background:"linear-gradient(to top,#f2f7f3 70%,transparent)", boxSizing:"border-box" },
+  emptyBox:      { display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:40, textAlign:"center" },
+  emptyText:     { color:"#bbb", fontSize:15, lineHeight:1.7 },
+  toast:         { position:"fixed", top:18, left:"50%", transform:"translateX(-50%)", color:"#fff", padding:"11px 24px", borderRadius:32, fontWeight:800, fontSize:14, zIndex:999, boxShadow:"0 4px 20px rgba(0,0,0,0.2)", whiteSpace:"nowrap" },
+  savingBar:     { position:"fixed", top:0, left:0, right:0, background:"#1a4731", color:"#fff", fontSize:11, fontWeight:700, textAlign:"center", padding:"4px", zIndex:1000 },
+  dbWarnBar:     { background:"#e63946", color:"#fff", fontSize:12, fontWeight:700, textAlign:"center", padding:"8px 14px" },
+  // Merged order summary styles
+  mergeRow:      { display:"flex", alignItems:"center", gap:10, background:"#fff", borderRadius:14, padding:"12px 14px", marginBottom:8, boxShadow:"0 1px 6px rgba(0,0,0,0.06)" },
+  memberTag:     { background:"#f0faf4", color:"#1a4731", borderRadius:6, padding:"2px 8px", fontSize:11, fontWeight:700, border:"1px solid #d8eadf" },
+  totalQtyBadge: { background:"linear-gradient(135deg,#1a4731,#2d6a4f)", color:"#fff", borderRadius:12, padding:"8px 14px", fontWeight:900, fontSize:20, minWidth:52, textAlign:"center" },
+};
+
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
