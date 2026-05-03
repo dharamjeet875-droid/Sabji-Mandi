@@ -38,14 +38,14 @@ const ADMIN_PIN = "1234";
 
 const CATEGORIES = {
   Vegetables: [
-    {name:"Tomato",emoji:"🍅"},{name:"Potato",emoji:"🥔"},
-    {name:"Onion",emoji:"🧅"},{name:"Garlic",emoji:"🧄"},
-    {name:"Ginger",emoji:"🫚"},{name:"Spinach",emoji:"🥬"},
-    {name:"Coriander",emoji:"🌿"},{name:"Green Chilli",emoji:"🌶️"},
-    {name:"Carrot",emoji:"🥕"},{name:"Capsicum",emoji:"🫑"},
-    {name:"Cabbage",emoji:"🥦"},{name:"Cauliflower",emoji:"🥦"},
-    {name:"Peas",emoji:"🫛"},{name:"Radish",emoji:"🌱"},
-    {name:"Brinjal",emoji:"🍆"},{name:"Corn",emoji:"🌽"},
+    {name:"Tamatar",emoji:"🍅"},{name:"Aloo",emoji:"🥔"},
+    {name:"Pyaz",emoji:"🧅"},{name:"Lehsun",emoji:"🧄"},
+    {name:"Adrak",emoji:"🫚"},{name:"Palak",emoji:"🥬"},
+    {name:"Dhaniya",emoji:"🌿"},{name:"Hari Mirch",emoji:"🌶️"},
+    {name:"Gajar",emoji:"🥕"},{name:"Shimla Mirch",emoji:"🫑"},
+    {name:"Band Gobhi",emoji:"🥦"},{name:"Phool Gobhi",emoji:"🥦"},
+    {name:"Matar",emoji:"🫛"},{name:"Mooli",emoji:"🌱"},
+    {name:"Baingan",emoji:"🍆"},{name:"Makka",emoji:"🌽"},
     {name:"Mushroom",emoji:"🍄"},{name:"Tori",emoji:"🥒"},
     {name:"Karela",emoji:"🫛"},{name:"Bhindi",emoji:"🌿"},
     {name:"Petha",emoji:"🎃"},{name:"Kaddu",emoji:"🎃"},
@@ -62,10 +62,11 @@ const CATEGORIES = {
     {name:"Kiwi",emoji:"🥝"},
   ],
   Salad: [
-    {name:"Cucumber",emoji:"🥒"},{name:"Lettuce",emoji:"🥗"},
-    {name:"Beetroot",emoji:"❤️"},{name:"Mint",emoji:"🌿"},
-    {name:"Spring Onion",emoji:"🧅"},{name:"Cherry Tomato",emoji:"🍒"},
+    {name:"Kheera",emoji:"🥒"},{name:"Lettuce",emoji:"🥗"},
+    {name:"Chukandar",emoji:"❤️"},{name:"Pudina",emoji:"🌿"},
+    {name:"Hara Pyaz",emoji:"🧅"},{name:"Cherry Tamatar",emoji:"🍒"},
     {name:"Celery",emoji:"🌱"},{name:"Broccoli",emoji:"🥦"},
+    {name:"Khakhadi",emoji:"🥒"},
   ],
 };
 
@@ -187,8 +188,8 @@ function HomeScreen({setView,selMember,setSelMember,getBalance}){
             return(
               <button key={m} onClick={()=>setSelMember(m)} style={{...S.memberBtn,background:sel?"#2d6a4f":"#f0faf4",border:`2px solid ${sel?"#2d6a4f":"#d8eadf"}`,color:sel?"#fff":"#1b1b1b"}}>
                 <span style={{fontWeight:700,fontSize:14}}>👤 {m}</span>
-                <span style={{fontSize:12,fontWeight:700,color:sel?"rgba(255,255,255,0.85)":"#2d6a4f"}}>
-                  {sel?(bal>0?`Owes ${fmt(bal)}`:bal<0?`Credit ${fmt(-bal)}`:"Settled ✓"):"Tap to select"}
+                <span style={{fontSize:12,color:sel?"rgba(255,255,255,0.7)":"#aaa"}}>
+                  {sel?"Selected ✓":"Tap to select"}
                 </span>
               </button>
             );
@@ -232,6 +233,9 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
   const [submitted,setSubmitted]=React.useState(false);
   const [activeCat,setActiveCat]=React.useState("Vegetables");
   const [searchQ,setSearchQ]=React.useState("");
+  const [customItem,setCustomItem]=React.useState("");
+  const [customQty,setCustomQty]=React.useState("");
+  const [customList,setCustomList]=React.useState([]);
   const ledger=data.ledger?.[member]||{payments:[],bills:[]};
   const balance=getBalance(member);
   const existingOrder=activeTrip?.orders?.find(o=>o.member===member);
@@ -240,13 +244,28 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
     else{setMyOrders({});setSubmitted(false);}
   },[activeTrip?.id,member]);
   function setQty(name,val){setMyOrders(o=>({...o,[name]:Math.max(0,val)}));}
+  function addCustomItem(){
+    const name=customItem.trim();
+    const qty=parseFloat(customQty);
+    if(!name)return showToast("Item ka naam likho!","#e63946");
+    if(!qty||qty<=0)return showToast("Quantity bharo!","#e63946");
+    setCustomList(l=>{
+      const existing=l.find(i=>i.name.toLowerCase()===name.toLowerCase());
+      if(existing) return l.map(i=>i.name.toLowerCase()===name.toLowerCase()?{...i,qty}:i);
+      return [...l,{name,qty}];
+    });
+    setCustomItem("");setCustomQty("");
+    showToast("✅ Custom item added!");
+  }
+  function removeCustomItem(name){setCustomList(l=>l.filter(i=>i.name!==name));}
   function submitOrder(){
     const items=Object.entries(myOrders).filter(([,q])=>Number(q)>0).map(([name,qty])=>({name,qty:Number(qty)}));
-    if(!items.length)return showToast("ਕੋਈ ਚੀਜ਼ ਚੁਣੋ!","#e63946");
+    const allItems=[...items,...customList.map(i=>({...i,custom:true}))];
+    if(!allItems.length)return showToast("ਕੋਈ ਚੀਜ਼ ਚੁਣੋ!","#e63946");
     setData(s=>{
       const trips=s.trips.map(t=>{
         if(t.id!==activeTrip.id)return t;
-        return{...t,orders:[...t.orders.filter(o=>o.member!==member),{id:uid(),member,items}]};
+        return{...t,orders:[...t.orders.filter(o=>o.member!==member),{id:uid(),member,items:allItems}]};
       });
       return{...s,trips};
     });
@@ -324,12 +343,35 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
                   </div>
                 );
               })}
-              {Object.values(myOrders).some(q=>q>0)&&(
+              {/* Custom item entry */}
+              <div style={{background:"#fff",borderRadius:14,padding:14,marginTop:12,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",border:"1.5px dashed #b7e4c7"}}>
+                <p style={{...S.label,marginTop:0,color:"#2d6a4f"}}>✏️ Custom Item (jo list mein nahi)</p>
+                <div style={{display:"flex",gap:8}}>
+                  <input style={{...S.input,flex:2}} placeholder="Item ka naam..." value={customItem} onChange={e=>setCustomItem(e.target.value)}/>
+                  <input style={{...S.input,flex:1}} placeholder="Qty" type="number" min="0" step="0.5" value={customQty} onChange={e=>setCustomQty(e.target.value)}/>
+                  <button style={{...S.btn,...S.btnGreen,padding:"11px 14px"}} onClick={addCustomItem}>+</button>
+                </div>
+                {customList.length>0&&(
+                  <div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>
+                    {customList.map(i=>(
+                      <div key={i.name} style={{display:"flex",alignItems:"center",gap:4,background:"#fff9e6",border:"1.5px solid #f4d03f",borderRadius:8,padding:"3px 8px"}}>
+                        <span style={{fontSize:12,fontWeight:700,color:"#b7770d"}}>✏️ {i.name} × {i.qty}</span>
+                        <button onClick={()=>removeCustomItem(i.name)} style={{background:"none",border:"none",color:"#e63946",cursor:"pointer",fontSize:14,fontWeight:800,padding:"0 2px"}}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {(Object.values(myOrders).some(q=>q>0)||customList.length>0)&&(
                 <div style={{...S.summaryCard,marginTop:14}}>
                   <p style={{...S.label,marginTop:0}}>Your Order:</p>
                   <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                     {Object.entries(myOrders).filter(([,q])=>q>0).map(([name,qty])=>(
                       <span key={name} style={S.itemTag}>{EMOJI_MAP[name]} {name} × {qty}</span>
+                    ))}
+                    {customList.map(i=>(
+                      <span key={i.name} style={{...S.itemTag,background:"#fff9e6",color:"#b7770d",border:"1px solid #f4d03f"}}>✏️ {i.name} × {i.qty}</span>
                     ))}
                   </div>
                 </div>
@@ -403,9 +445,10 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
     const totals={};
     trip.orders.forEach(order=>{
       order.items.forEach(i=>{
-        if(!totals[i.name])totals[i.name]={name:i.name,total:0,byMember:[]};
-        totals[i.name].total+=Number(i.qty);
-        totals[i.name].byMember.push({member:shortName(order.member),qty:i.qty});
+        const key=i.name+(i.custom?"__custom":"");
+        if(!totals[key])totals[key]={name:i.name,total:0,byMember:[],custom:!!i.custom};
+        totals[key].total+=Number(i.qty);
+        totals[key].byMember.push({member:shortName(order.member),qty:i.qty});
       });
     });
     return Object.values(totals).sort((a,b)=>b.total-a.total);
@@ -503,8 +546,8 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                 </div>
                 {mergedOrders.length===0?<div style={S.emptyBox}><p style={S.emptyText}>No orders yet.</p></div>:(
                   <>
-                    <p style={S.label}>🛒 What to Buy at Mandi</p>
-                    {mergedOrders.map(item=>(
+                    <p style={S.label}>🛒 Regular Items - Kya Lana Hai</p>
+                    {mergedOrders.filter(i=>!i.custom).map(item=>(
                       <div key={item.name} style={S.mergeRow}>
                         <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
                           <span style={{fontSize:26,minWidth:32,textAlign:"center"}}>{EMOJI_MAP[item.name]||"🛒"}</span>
@@ -518,6 +561,25 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                         <div style={S.totalQtyBadge}>{item.total}<span style={{fontSize:10,fontWeight:600}}> kg</span></div>
                       </div>
                     ))}
+                    {mergedOrders.some(i=>i.custom)&&(
+                      <>
+                        <p style={{...S.label,marginTop:20,color:"#b7770d"}}>✏️ Custom Items (Special Requests)</p>
+                        {mergedOrders.filter(i=>i.custom).map(item=>(
+                          <div key={item.name} style={{...S.mergeRow,background:"#fff9e6",border:"1.5px solid #f4d03f"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+                              <span style={{fontSize:26,minWidth:32,textAlign:"center"}}>✏️</span>
+                              <div style={{flex:1}}>
+                                <div style={{fontWeight:800,fontSize:14,color:"#b7770d"}}>{item.name}</div>
+                                <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
+                                  {item.byMember.map(bm=><span key={bm.member} style={{...S.memberTag,background:"#fef9e7",borderColor:"#f4d03f"}}>{bm.member}: {bm.qty}</span>)}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{...S.totalQtyBadge,background:"linear-gradient(135deg,#b7770d,#d4a017)"}}>{item.total}<span style={{fontSize:10,fontWeight:600}}> kg</span></div>
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </>
                 )}
               </>
