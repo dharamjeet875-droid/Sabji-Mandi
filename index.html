@@ -50,7 +50,7 @@ const CATEGORIES = {
     {name:"Karela",emoji:"🫛"},{name:"Bhindi",emoji:"🌿"},
     {name:"Petha",emoji:"🎃"},{name:"Kaddu",emoji:"🎃"},
     {name:"Ghiya",emoji:"🫙"},{name:"Tinde",emoji:"🫑"},
-    {name:"Chaule",emoji:"🌾"},
+    {name:"Chaule",emoji:"🫘"},
   ],
   Fruits: [
     {name:"Apple",emoji:"🍎"},{name:"Banana",emoji:"🍌"},
@@ -187,8 +187,8 @@ function HomeScreen({setView,selMember,setSelMember,getBalance}){
             return(
               <button key={m} onClick={()=>setSelMember(m)} style={{...S.memberBtn,background:sel?"#2d6a4f":"#f0faf4",border:`2px solid ${sel?"#2d6a4f":"#d8eadf"}`,color:sel?"#fff":"#1b1b1b"}}>
                 <span style={{fontWeight:700,fontSize:14}}>👤 {m}</span>
-                <span style={{fontSize:12,fontWeight:700,color:sel?"rgba(255,255,255,0.85)":bal>0?"#e63946":"#2d6a4f"}}>
-                  {bal>0?`Owes ${fmt(bal)}`:bal<0?`Credit ${fmt(-bal)}`:"Settled ✓"}
+                <span style={{fontSize:12,fontWeight:700,color:sel?"rgba(255,255,255,0.85)":"#2d6a4f"}}>
+                  {sel?(bal>0?`Owes ${fmt(bal)}`:bal<0?`Credit ${fmt(-bal)}`:"Settled ✓"):"Tap to select"}
                 </span>
               </button>
             );
@@ -231,6 +231,7 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
   const [myOrders,setMyOrders]=React.useState({});
   const [submitted,setSubmitted]=React.useState(false);
   const [activeCat,setActiveCat]=React.useState("Vegetables");
+  const [searchQ,setSearchQ]=React.useState("");
   const ledger=data.ledger?.[member]||{payments:[],bills:[]};
   const balance=getBalance(member);
   const existingOrder=activeTrip?.orders?.find(o=>o.member===member);
@@ -275,14 +276,28 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
           ):(
             <>
               <div style={S.tripBanner}><span>📅 Trip: <b>{activeTrip.date}</b></span><span style={{...S.badge,background:"#2d6a4f"}}>Open</span></div>
-              <div style={{display:"flex",gap:8,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
-                {Object.keys(CATEGORIES).map(cat=>(
-                  <button key={cat} onClick={()=>setActiveCat(cat)} style={{...S.pill,whiteSpace:"nowrap",background:activeCat===cat?"#2d6a4f":"#e8f5e9",color:activeCat===cat?"#fff":"#2d6a4f"}}>
-                    {cat==="Vegetables"?"🥦":cat==="Fruits"?"🍎":"🥗"} {cat}
-                  </button>
-                ))}
-              </div>
-              {CATEGORIES[activeCat].map(item=>{
+              {/* Search bar */}
+              <input
+                style={{...S.input,marginBottom:10,marginTop:4,background:"#fff",paddingLeft:36,backgroundImage:"url('data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' fill=\'%23999\' viewBox=\'0 0 16 16\'><path d=\'M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z\'/></svg>')",backgroundRepeat:"no-repeat",backgroundPosition:"10px center"}}
+                placeholder="Search items..."
+                value={searchQ}
+                onChange={e=>setSearchQ(e.target.value)}
+              />
+              {/* Category pills - hidden when searching */}
+              {!searchQ&&(
+                <div style={{display:"flex",gap:8,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
+                  {Object.keys(CATEGORIES).map(cat=>(
+                    <button key={cat} onClick={()=>setActiveCat(cat)} style={{...S.pill,whiteSpace:"nowrap",background:activeCat===cat?"#2d6a4f":"#e8f5e9",color:activeCat===cat?"#fff":"#2d6a4f"}}>
+                      {cat==="Vegetables"?"🥦":cat==="Fruits"?"🍎":"🥗"} {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Items list */}
+              {(searchQ
+                ? Object.values(CATEGORIES).flat().filter(i=>i.name.toLowerCase().includes(searchQ.toLowerCase()))
+                : CATEGORIES[activeCat]
+              ).map(item=>{
                 const qty=Number(myOrders[item.name]||0);
                 return(
                   <div key={item.name} style={S.itemRow}>
@@ -292,7 +307,18 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
                     </div>
                     <div style={S.qtyControl}>
                       <button style={{...S.qtyBtn,opacity:qty===0?0.3:1}} onClick={()=>setQty(item.name,qty-0.5)}>−</button>
-                      <span style={S.qtyVal}>{qty>0?qty:"—"}</span>
+                      <input
+                        type="number"
+                        style={{width:44,textAlign:"center",fontWeight:800,fontSize:15,color:"#1a4731",border:"1.5px solid #d8eadf",borderRadius:8,padding:"3px 2px",background:"#f8fdf8",fontFamily:"inherit"}}
+                        value={qty>0?qty:""}
+                        placeholder="—"
+                        min="0"
+                        step="0.5"
+                        onChange={e=>{
+                          const v=parseFloat(e.target.value);
+                          setQty(item.name, isNaN(v)?0:Math.max(0,v));
+                        }}
+                      />
                       <button style={S.qtyBtn} onClick={()=>setQty(item.name,qty+0.5)}>+</button>
                     </div>
                   </div>
