@@ -74,7 +74,7 @@ const CATEGORIES = {
     {name:"Chukandar",emoji:"❤️"},{name:"Pudina",emoji:"🌿"},
     {name:"Hara Pyaz",emoji:"🧅"},{name:"Cherry Tamatar",emoji:"🍒"},
     {name:"Celery",emoji:"🌱"},{name:"Broccoli",emoji:"🥦"},
-    {name:"Khakhadi",emoji:"🥒"},
+    {name:"Khakhadi",emoji:"🥒"},{name:"Taar",emoji:"🌿"},
   ],
 };
 
@@ -506,15 +506,15 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
     if(!selTrip) return;
     setDist(prev=>{
       const nd={};
-      selTrip.items.forEach(item=>{
+      (selTrip.items||[]).forEach(item=>{
         nd[item.id] = prev[item.id] || { sel:MEMBERS.slice(), customMode:false, customQtys:{}, confirmed:false };
       });
       return nd;
     });
     setFinalBill(null);
-  },[selTrip?.id]);
+  },[selTrip ? selTrip.id : null]);
 
-  function getDist(itemId){ return dist[itemId]||{sel:MEMBERS.slice(),customMode:false,customQtys:{},confirmed:false}; }
+  function getDist(itemId){ if(!itemId) return {sel:MEMBERS.slice(),customMode:false,customQtys:{},confirmed:false}; return dist[itemId]||{sel:MEMBERS.slice(),customMode:false,customQtys:{},confirmed:false}; }
 
   function toggleSel(itemId, member){
     setDist(d=>{
@@ -548,7 +548,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
   }
 
   function calcSmartSplit(trip, distData){
-    if(!trip||!trip.orders.length) return{};
+    if(!trip||!trip.orders||!trip.orders.length) return{};
     const d=distData||dist;
     const ordered=trip.orders.map(o=>o.member);
     const numH=ordered.length||1;
@@ -581,7 +581,10 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
   }
 
   function finalizeSplit(){
-    if(!selTrip) return;
+    if(!selTrip||!selTrip.items||!selTrip.orders||!selTrip.orders.length) {
+      showToast("Koi order nahi hai is trip mein!","#e63946");
+      return;
+    }
     const result=calcSmartSplit(selTrip,dist);
     setFinalBill(result);
   }
@@ -634,9 +637,8 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
     setData(s=>({...s,ledger:{...s.ledger,[payMember]:{...s.ledger[payMember],payments:[...s.ledger[payMember].payments,pay]}}}));
     setPayAmount("");setPayNote("");showToast(`✅ ${fmt(Number(payAmount))} recorded`);
   }
-  // splitData replaced by calcSmartSplit
-  const totalItemCost=selTrip?.items.reduce((s,i)=>s+i.totalCost,0)||0;
-  const totalCost=totalItemCost+(selTrip?.travelExpense||0);
+  const totalItemCost=selTrip&&selTrip.items?selTrip.items.reduce((s,i)=>s+i.totalCost,0):0;
+  const totalCost=totalItemCost+(selTrip?selTrip.travelExpense||0:0);
   const mergedOrders=getMergedOrders(selTrip);
 
   return(
@@ -1044,6 +1046,137 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
               </>
             )}
           </>
+        }
+
+        {
+        tab==="payments"&&(
+          <>
+            <p style={S.label}>Record Payment Received</p>
+            <select style={S.select} value={payMember} onChange={e=>setPayMember(e.target.value)}>
+              <option value="">— Member chunno —</option>
+              {MEMBERS.map(m=><option key={m} value={m}>{m} · owes {fmt(getBalance(m))}</option>)}
+            </select>
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+              <input style={{...S.input,flex:1}} placeholder="Amount ₹" type="number" value={payAmount} onChange={e=>setPayAmount(e.target.value)}/>
+              <input style={{...S.input,flex:1}} placeholder="Note (opt)" value={payNote} onChange={e=>setPayNote(e.target.value)}/>
+            </div>
+            <button style={{...S.btn,...S.btnGreen,marginTop:10,width:"100%"}} onClick={recordPayment}>
+              💵 Payment Record Karo
+            </button>
+
+            <p style={{...S.label,marginTop:24}}>Sabka Balance</p>
+            {MEMBERS.map(m=>{
+              const bal=getBalance(m),l=data.ledger[m];
+              return(
+                <div key={m} style={S.memberBalCard}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <b style={{fontSize:14}}>👤 {m}</b>
+                      <div style={{fontSize:11,color:"#888",marginTop:2}}>Billed: {fmt(l.bills.reduce((s,b)=>s+b.amount,0))} · Paid: {fmt(l.payments.reduce((s,p)=>s+p.amount,0))}</div>
+                    </div>
+                    <span style={{...S.amountBadge,fontSize:13,background:bal>0?"#e63946":bal<0?"#2d6a4f":"#888"}}>{bal>0?`Owes ${fmt(bal)}`:bal<0?`Cr ${fmt(-bal)}`:"✓ Clear"}</span>
+                  </div>
+                  {bal>0&&(
+                    <button onClick={()=>{
+                      const phone=getPhone(m);
+                      if(!phone||phone.includes("X")){alert("Phone number update karo!");return;}
+                      const msg=`Sat Sri Akal ${shortName(m)} Ji 🙏\n\nAapka Sabji Mandi balance hai: *₹${bal.toFixed(2)}*\nKripaya payment kar do. Shukriya!`;
+                      window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
+                    }} style={{marginTop:8,width:"100%",padding:"8px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
+                      📲 Payment Remind — {shortName(m)}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </>
         )}
 
->
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const [data,setDataRaw]=React.useState(null);
+  const [view,setView]=React.useState("home");
+  const [selMember,setSelMember]=React.useState("");
+  const [pinInput,setPinInput]=React.useState("");
+  const [pinError,setPinError]=React.useState(false);
+  const [toast,setToast]=React.useState(null);
+  const [saving,setSaving]=React.useState(false);
+  const pollRef=React.useRef(null);
+
+  React.useEffect(()=>{
+    // Load data with 6s timeout fallback
+    let loaded=false;
+    const timeout=setTimeout(()=>{
+      if(!loaded){ console.warn("DB timeout - using empty data"); setDataRaw(EMPTY_DATA); }
+    },6000);
+    dbLoad().then(d=>{
+      loaded=true;
+      clearTimeout(timeout);
+      setDataRaw(d||EMPTY_DATA);
+    }).catch(()=>{
+      loaded=true;
+      clearTimeout(timeout);
+      setDataRaw(EMPTY_DATA);
+    });
+    pollRef.current=setInterval(()=>{
+      dbLoad().then(d=>{ if(d) setDataRaw(d); }).catch(()=>{});
+    },12000);
+    return()=>{ clearInterval(pollRef.current); };
+  },[]);
+
+  const setData=React.useCallback((updater)=>{
+    setSaving(true);
+    setDataRaw(prev=>{
+      const next=typeof updater==="function"?updater(prev):updater;
+      dbSave(next).finally(()=>setSaving(false));
+      return next;
+    });
+  },[]);
+
+  function showToast(msg,color="#2d6a4f"){setToast({msg,color});setTimeout(()=>setToast(null),2800);}
+
+  function getBalance(member){
+    const l=data&&data.ledger?data.ledger[member]:null;
+    if(!l) return 0;
+    return l.bills.reduce((s,b)=>s+b.amount,0)-l.payments.reduce((s,p)=>s+p.amount,0);
+  }
+
+  function enterAdmin(){
+    if(pinInput===ADMIN_PIN){setPinError(false);setPinInput("");setView("admin");}
+    else setPinError(true);
+  }
+
+  const activeTrip=data&&data.trips?data.trips.find(t=>t.status==="open"):null;
+
+  if(!data) return(
+    <div style={{...S.root,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
+      <div style={{textAlign:"center",color:"#2d6a4f"}}>
+        <div style={{fontSize:56,marginBottom:14}}>🛒</div>
+        <div style={{fontWeight:800,fontSize:17}}>Loading Sabji Mandi…</div>
+        <div style={{fontSize:12,color:"#aaa",marginTop:8}}>Database se connect ho raha hai…</div>
+        <div style={{fontSize:11,color:"#ccc",marginTop:4}}>Agar zyada der lage toh internet check karo</div>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={S.root}>
+      {saving&&<div style={S.savingBar}>💾 Saving…</div>}
+      {toast&&<div style={{...S.toast,background:toast.color}}>{toast.msg}</div>}
+      {view==="home"&&<HomeScreen setView={setView} selMember={selMember} setSelMember={setSelMember} getBalance={getBalance}/>}
+      {view==="customer"&&<CustomerScreen data={data} setData={setData} activeTrip={activeTrip} member={selMember} setView={setView} showToast={showToast} getBalance={getBalance}/>}
+      {view==="adminPin"&&<PinScreen pinInput={pinInput} setPinInput={setPinInput} pinError={pinError} enterAdmin={enterAdmin} setView={setView}/>}
+      {view==="admin"&&<AdminScreen data={data} setData={setData} setView={setView} showToast={showToast} getBalance={getBalance}/>}
+    </div>
+  );
+}
+
+const root=ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App/>);
+</script>
+</body>
+</html>
