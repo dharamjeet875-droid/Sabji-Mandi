@@ -495,81 +495,95 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
   const [payAmount,setPayAmount]=React.useState("");
   const [payNote,setPayNote]=React.useState("");
   const selTrip=data.trips.find(t=>t.id===selTripId)||data.trips[0];
-  // Distribution state: {itemId: {members: Set, customMode: bool, customQtys: {member: qty}}}
-  const [distMap,setDistMap]=React.useState({});
-  const [splitView,setSplitView]=React.useState("all"); // "all" | "one"
+  // dist: { [itemId]: { sel: [memberName,...], customMode: bool, customQtys: {member:qty}, confirmed: bool } }
+  const [dist,setDist]=React.useState({});
+  const [splitView,setSplitView]=React.useState("all");
   const [focusItem,setFocusItem]=React.useState(0);
+  const [finalBill,setFinalBill]=React.useState(null); // computed after finalize
 
-  function initDist(trip){
-    if(!trip) return;
-    const dm={};
-    trip.items.forEach(item=>{
-      if(!dm[item.id]) dm[item.id]={members:new Set(MEMBERS),customMode:false,customQtys:{}};
+  // Init dist when trip changes
+  React.useEffect(()=>{
+    if(!selTrip) return;
+    setDist(prev=>{
+      const nd={};
+      selTrip.items.forEach(item=>{
+        nd[item.id] = prev[item.id] || { sel:MEMBERS.slice(), customMode:false, customQtys:{}, confirmed:false };
+      });
+      return nd;
     });
-    setDistMap(dm);
-  }
-  React.useEffect(()=>{if(selTrip) initDist(selTrip);},[selTrip?.id]);
+    setFinalBill(null);
+  },[selTrip?.id]);
 
-  function toggleMember(itemId, member){
-    setDistMap(dm=>{
-      const cur=dm[itemId]||{members:new Set(MEMBERS),customMode:false,customQtys:{}};
-      const newM=new Set(cur.members);
-      if(newM.has(member)) newM.delete(member); else newM.add(member);
-      if(newM.size===0) newM.add(member); // keep at least 1
-      // reset custom qtys when members change
-      return{...dm,[itemId]:{...cur,members:newM,customQtys:{}}};
+  function getDist(itemId){ return dist[itemId]||{sel:MEMBERS.slice(),customMode:false,customQtys:{},confirmed:false}; }
+
+  function toggleSel(itemId, member){
+    setDist(d=>{
+      const cur=getDist(itemId);
+      let newSel=cur.sel.includes(member)?cur.sel.filter(m=>m!==member):[...cur.sel,member];
+      if(newSel.length===0) newSel=[member];
+      return{...d,[itemId]:{...cur,sel:newSel,customQtys:{},confirmed:false}};
     });
   }
-  function selectAll(itemId){
-    setDistMap(dm=>{
-      const cur=dm[itemId]||{members:new Set(MEMBERS),customMode:false,customQtys:{}};
-      return{...dm,[itemId]:{...cur,members:new Set(MEMBERS),customQtys:{}}};
-    });
+  function selAll(itemId){
+    setDist(d=>({...d,[itemId]:{...getDist(itemId),sel:MEMBERS.slice(),customQtys:{},confirmed:false}}));
   }
   function toggleCustom(itemId){
-    setDistMap(dm=>{
-      const cur=dm[itemId]||{members:new Set(MEMBERS),customMode:false,customQtys:{}};
-      // pre-fill equal split
-      const mArr=[...cur.members];
-      const eachQty=Number((selTrip.items.find(i=>i.id===itemId)?.qty||0)/mArr.length).toFixed(2);
+    setDist(d=>{
+      const cur=getDist(itemId);
+      const item=selTrip?.items.find(i=>i.id===itemId);
+      const each=item?parseFloat((item.qty/cur.sel.length).toFixed(2)):0;
       const cq={};
-      mArr.forEach(m=>cq[m]=parseFloat(eachQty));
-      return{...dm,[itemId]:{...cur,customMode:!cur.customMode,customQtys:cur.customMode?{}:cq}};
+      cur.sel.forEach(m=>cq[m]=each);
+      return{...d,[itemId]:{...cur,customMode:!cur.customMode,customQtys:cur.customMode?{}:cq,confirmed:false}};
     });
   }
   function setCustomQty(itemId,member,val){
-    setDistMap(dm=>{
-      const cur=dm[itemId];
-      return{...dm,[itemId]:{...cur,customQtys:{...cur.customQtys,[member]:parseFloat(val)||0}}};
+    setDist(d=>{
+      const cur=getDist(itemId);
+      return{...d,[itemId]:{...cur,customQtys:{...cur.customQtys,[member]:parseFloat(val)||0}}};
     });
   }
+  function confirmItem(itemId){
+    setDist(d=>({...d,[itemId]:{...getDist(itemId),confirmed:true}}));
+  }
 
-  function calcSmartSplit(trip){
+  function calcSmartSplit(trip, distData){
     if(!trip||!trip.orders.length) return{};
-    const numHouses=trip.orders.length||1;
-    const travelShare=(trip.travelExpense||0)/numHouses;
+    const d=distData||dist;
+    const ordered=trip.orders.map(o=>o.member);
+    const numH=ordered.length||1;
+    const travShare=(trip.travelExpense||0)/numH;
     const res={};
-    MEMBERS.forEach(m=>{ if(trip.orders.find(o=>o.member===m)) res[m]={amount:travelShare,items:[]}; });
+    ordered.forEach(m=>{ res[m]={amount:travShare,items:[]}; });
     trip.items.forEach(item=>{
-      const dist=distMap[item.id];
-      const mArr=dist?[...dist.members].filter(m=>res[m]!==undefined):Object.keys(res);
-      if(!mArr.length) return;
-      if(dist?.customMode && Object.keys(dist.customQtys).length){
-        mArr.forEach(m=>{
-          const q=dist.customQtys[m]||0;
-          if(res[m]) res[m].items.push({name:item.name,qty:q});
-          const cost=(item.totalCost/item.qty)*q;
-          if(res[m]) res[m].amount+=cost;
+      const cur=d[item.id]||{sel:ordered,customMode:false,customQtys:{}};
+      const eligible=cur.sel.filter(m=>res[m]!==undefined);
+      if(!eligible.length) return;
+      const pricePerKg=item.qty>0?item.totalCost/item.qty:0;
+      if(cur.customMode && Object.keys(cur.customQtys).length>0){
+        eligible.forEach(m=>{
+          const q=parseFloat(cur.customQtys[m])||0;
+          res[m].items.push({name:item.name,qty:q,price:parseFloat((pricePerKg*q).toFixed(2))});
+          res[m].amount+=pricePerKg*q;
         });
       } else {
-        const eachQty=item.qty/mArr.length;
-        const costEach=item.totalCost/mArr.length;
-        mArr.forEach(m=>{
-          if(res[m]){res[m].items.push({name:item.name,qty:parseFloat(eachQty.toFixed(2))});res[m].amount+=costEach;}
+        const eachQty=parseFloat((item.qty/eligible.length).toFixed(2));
+        const eachCost=pricePerKg*eachQty;
+        eligible.forEach(m=>{
+          res[m].items.push({name:item.name,qty:eachQty,price:parseFloat(eachCost.toFixed(2))});
+          res[m].amount+=eachCost;
         });
       }
     });
+    // round amounts
+    Object.keys(res).forEach(m=>res[m].amount=parseFloat(res[m].amount.toFixed(2)));
     return res;
+  }
+
+  function finalizeSplit(){
+    if(!selTrip) return;
+    const result=calcSmartSplit(selTrip,dist);
+    setFinalBill(result);
   }
 
 
@@ -768,7 +782,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
               <>
                 <div style={S.tripBanner}><span>📅 <b>{selTrip.date}</b></span><span style={{...S.badge,background:selTrip.status==="settled"?"#457b9d":"#2d6a4f"}}>{selTrip.status}</span></div>
 
-                {/* Cost summary */}
+                {/* Cost summary bar */}
                 <div style={S.summaryCard}>
                   <div style={S.summaryRow}><span>Items Cost</span><b>{fmt(totalItemCost)}</b></div>
                   <div style={S.summaryRow}><span>Travel</span><b>{fmt(selTrip.travelExpense)}</b></div>
@@ -777,181 +791,254 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   </div>
                 </div>
 
-                {selTrip.items.length===0?<div style={S.emptyBox}><p style={S.emptyText}>Pehle Buy tab mein items add karo.</p></div>:(
+                {selTrip.items.length===0
+                  ?<div style={S.emptyBox}><p style={S.emptyText}>Pehle Buy tab mein items add karo.</p></div>
+                  :(
                   <>
                     {/* View toggle */}
                     <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
-                      <span style={{fontSize:13,fontWeight:800,color:"#555",flex:1}}>📦 Items distribute karo:</span>
-                      <button onClick={()=>setSplitView("all")} style={{...S.pill,background:splitView==="all"?"#2d6a4f":"#e8f5e9",color:splitView==="all"?"#fff":"#2d6a4f"}}>All</button>
-                      <button onClick={()=>{setSplitView("one");setFocusItem(0);}} style={{...S.pill,background:splitView==="one"?"#2d6a4f":"#e8f5e9",color:splitView==="one"?"#fff":"#2d6a4f"}}>One by One</button>
+                      <span style={{fontSize:13,fontWeight:800,color:"#555",flex:1}}>📦 Items baanto:</span>
+                      <button onClick={()=>{setSplitView("all");}} style={{...S.pill,background:splitView==="all"?"#2d6a4f":"#e8f5e9",color:splitView==="all"?"#fff":"#2d6a4f",fontWeight:800}}>Sab Ek Saath</button>
+                      <button onClick={()=>{setSplitView("one");setFocusItem(0);}} style={{...S.pill,background:splitView==="one"?"#2d6a4f":"#e8f5e9",color:splitView==="one"?"#fff":"#2d6a4f",fontWeight:800}}>Ek Ek Karke</button>
                     </div>
 
-                    {/* ONE BY ONE view - nav arrows */}
+                    {/* One-by-one nav */}
                     {splitView==="one"&&(
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                        <button onClick={()=>setFocusItem(i=>Math.max(0,i-1))} style={{...S.btn,...S.btnGhost,padding:"8px 18px",opacity:focusItem===0?0.3:1}}>← Prev</button>
-                        <span style={{fontWeight:700,fontSize:13,color:"#555"}}>{focusItem+1} / {selTrip.items.length}</span>
-                        <button onClick={()=>setFocusItem(i=>Math.min(selTrip.items.length-1,i+1))} style={{...S.btn,...S.btnGhost,padding:"8px 18px",opacity:focusItem===selTrip.items.length-1?0.3:1}}>Next →</button>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,background:"#fff",borderRadius:12,padding:"10px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                        <button onClick={()=>setFocusItem(i=>Math.max(0,i-1))} style={{...S.btn,...S.btnGhost,padding:"8px 16px",opacity:focusItem===0?0.3:1}}>← Pehle</button>
+                        <div style={{textAlign:"center"}}>
+                          <div style={{fontWeight:800,fontSize:14}}>{selTrip.items[focusItem]?.name}</div>
+                          <div style={{fontSize:12,color:"#aaa"}}>{focusItem+1} / {selTrip.items.length}</div>
+                        </div>
+                        <button onClick={()=>setFocusItem(i=>Math.min(selTrip.items.length-1,i+1))} style={{...S.btn,...S.btnGhost,padding:"8px 16px",opacity:focusItem===selTrip.items.length-1?0.3:1}}>Agla →</button>
                       </div>
                     )}
 
                     {/* Item cards */}
-                    {(splitView==="one"?[selTrip.items[focusItem]]:selTrip.items).map(item=>{
-                      const dist=distMap[item.id]||{members:new Set(MEMBERS),customMode:false,customQtys:{}};
-                      const selMembers=[...dist.members];
-                      const orderedMembers=MEMBERS.filter(m=>selTrip.orders.find(o=>o.member===m));
-                      const allSelected=orderedMembers.every(m=>dist.members.has(m));
-                      const eachQty=selMembers.length>0?(item.qty/selMembers.length).toFixed(2):0;
+                    {(splitView==="one"?[selTrip.items[focusItem]]:selTrip.items).filter(Boolean).map(item=>{
+                      const d=getDist(item.id);
+                      const pricePerKg=item.qty>0?(item.totalCost/item.qty):0;
+                      const eachQty=d.sel.length>0?parseFloat((item.qty/d.sel.length).toFixed(2)):0;
+                      const eachCost=parseFloat((pricePerKg*eachQty).toFixed(2));
+                      const customTotal=Object.values(d.customQtys).reduce((s,v)=>s+(parseFloat(v)||0),0);
+                      const customOk=Math.abs(customTotal-item.qty)<0.05;
                       return(
-                        <div key={item.id} style={{background:"#fff",borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,0.08)",border:"1.5px solid #e8f5e9"}}>
+                        <div key={item.id} style={{
+                          background:"#fff",borderRadius:18,padding:16,marginBottom:14,
+                          boxShadow:"0 2px 16px rgba(0,0,0,0.08)",
+                          border:`2px solid ${d.confirmed?"#2d6a4f":"#e8f5e9"}`,
+                        }}>
                           {/* Item header */}
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                             <div style={{display:"flex",alignItems:"center",gap:10}}>
-                              <span style={{fontSize:28}}>{EMOJI_MAP[item.name]||"🛒"}</span>
+                              <span style={{fontSize:30}}>{EMOJI_MAP[item.name]||"🛒"}</span>
                               <div>
-                                <b style={{fontSize:15}}>{item.name}</b>
-                                <div style={{fontSize:12,color:"#888"}}>{item.qty} kg · {fmt(item.totalCost)}</div>
+                                <b style={{fontSize:16}}>{item.name}</b>
+                                <div style={{fontSize:12,color:"#888",marginTop:1}}>{item.qty} kg · {fmt(item.totalCost)} · ₹{pricePerKg.toFixed(0)}/kg</div>
                               </div>
                             </div>
-                            <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:11,color:"#aaa"}}>Each gets</div>
-                              <div style={{fontWeight:900,fontSize:16,color:"#2d6a4f"}}>{dist.customMode?"Custom":eachQty+" kg"}</div>
-                            </div>
+                            {d.confirmed&&<span style={{...S.badge,background:"#2d6a4f",fontSize:12}}>✓ Done</span>}
                           </div>
 
-                          {/* Member selector */}
-                          <div style={{marginBottom:10}}>
-                            <div style={{fontSize:12,fontWeight:700,color:"#888",marginBottom:6}}>Kisne liya? Tap karo:</div>
-                            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                              {/* All button */}
-                              <button onClick={()=>selectAll(item.id)} style={{
-                                display:"flex",alignItems:"center",gap:4,padding:"7px 12px",borderRadius:20,border:"none",
-                                cursor:"pointer",fontFamily:"inherit",fontWeight:800,fontSize:12,
-                                background:allSelected?"#1a4731":"#e8f5e9",color:allSelected?"#fff":"#2d6a4f",
-                              }}>All ✓</button>
-                              {/* Individual member buttons */}
+                          {/* ── MEMBER SELECTOR ── */}
+                          <div style={{marginBottom:12}}>
+                            <div style={{fontSize:12,fontWeight:800,color:"#666",marginBottom:8}}>Kisne liya? Tap karke choose karo:</div>
+                            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+
+                              {/* ALL button */}
+                              <button
+                                onClick={()=>selAll(item.id)}
+                                style={{
+                                  padding:"8px 14px",borderRadius:20,border:"2px solid",cursor:"pointer",
+                                  fontFamily:"inherit",fontWeight:900,fontSize:12,
+                                  background:d.sel.length===MEMBERS.length?"#1a4731":"#fff",
+                                  color:d.sel.length===MEMBERS.length?"#fff":"#2d6a4f",
+                                  borderColor:d.sel.length===MEMBERS.length?"#1a4731":"#2d6a4f",
+                                }}>
+                                Sabhi ✓
+                              </button>
+
+                              {/* Individual initials */}
                               {MEMBERS.map(m=>{
-                                const inOrder=!!selTrip.orders.find(o=>o.member===m);
-                                const selected=dist.members.has(m);
+                                const selected=d.sel.includes(m);
                                 return(
-                                  <button key={m} onClick={()=>inOrder&&toggleMember(item.id,m)}
+                                  <button
+                                    key={m}
+                                    onClick={()=>toggleSel(item.id,m)}
                                     title={m}
                                     style={{
-                                      width:40,height:40,borderRadius:"50%",border:"none",cursor:inOrder?"pointer":"default",
-                                      fontFamily:"inherit",fontWeight:900,fontSize:13,
-                                      background:selected&&inOrder?"#2d6a4f":inOrder?"#e8f5e9":"#f0f0f0",
-                                      color:selected&&inOrder?"#fff":inOrder?"#2d6a4f":"#bbb",
-                                      opacity:inOrder?1:0.4,
-                                      boxShadow:selected&&inOrder?"0 2px 8px rgba(45,106,79,0.4)":"none",
-                                      position:"relative",
+                                      width:46,height:46,borderRadius:"50%",
+                                      border:`3px solid ${selected?"#2d6a4f":"#ddd"}`,
+                                      cursor:"pointer",fontFamily:"inherit",fontWeight:900,fontSize:13,
+                                      background:selected?"#2d6a4f":"#f5f5f5",
+                                      color:selected?"#fff":"#888",
+                                      boxShadow:selected?"0 3px 10px rgba(45,106,79,0.4)":"none",
+                                      transition:"all 0.15s",
                                     }}>
                                     {initials(m)}
                                   </button>
                                 );
                               })}
                             </div>
-                            {/* Selected members names */}
-                            <div style={{fontSize:11,color:"#888",marginTop:6}}>
-                              {selMembers.map(m=>shortName(m)).join(", ")}
+                            {/* Selected names shown below */}
+                            <div style={{fontSize:11,color:"#2d6a4f",fontWeight:700,marginTop:6}}>
+                              ✓ {d.sel.map(m=>shortName(m)).join(", ")}
                             </div>
                           </div>
 
-                          {/* Custom qty toggle */}
-                          <div style={{borderTop:"1px solid #f0f0f0",paddingTop:10}}>
-                            <button onClick={()=>toggleCustom(item.id)} style={{
-                              ...S.btn,padding:"7px 14px",fontSize:12,
-                              background:dist.customMode?"#1a4731":"#f0f0f0",
-                              color:dist.customMode?"#fff":"#555",
-                            }}>
-                              {dist.customMode?"✏️ Custom Mode ON":"✏️ Custom Quantity"}
-                            </button>
-
-                            {dist.customMode&&(
-                              <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:6}}>
-                                <div style={{fontSize:12,color:"#888",fontWeight:700}}>Har kisi ki quantity set karo (total: {item.qty} kg):</div>
-                                {selMembers.map(m=>(
-                                  <div key={m} style={{display:"flex",alignItems:"center",gap:10}}>
-                                    <div style={{width:36,height:36,borderRadius:"50%",background:"#2d6a4f",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>
-                                      {initials(m)}
-                                    </div>
-                                    <span style={{fontSize:13,fontWeight:700,flex:1,color:"#333"}}>{shortName(m)}</span>
-                                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                      <button style={S.qtyBtn} onClick={()=>setCustomQty(item.id,m,Math.max(0,(dist.customQtys[m]||0)-0.5))}>−</button>
-                                      <input type="number" min="0" step="0.5"
-                                        style={{width:56,textAlign:"center",fontWeight:800,fontSize:14,border:"1.5px solid #d8eadf",borderRadius:8,padding:"4px 2px",background:"#f8fdf8",fontFamily:"inherit"}}
-                                        value={dist.customQtys[m]||""}
-                                        placeholder="0"
-                                        onChange={e=>setCustomQty(item.id,m,e.target.value)}
-                                      />
-                                      <button style={S.qtyBtn} onClick={()=>setCustomQty(item.id,m,(dist.customQtys[m]||0)+0.5)}>+</button>
-                                    </div>
-                                  </div>
+                          {/* ── QUANTITY SPLIT PREVIEW ── */}
+                          {!d.customMode&&(
+                            <div style={{background:"#f0faf4",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
+                              <div style={{fontSize:12,color:"#555",fontWeight:700,marginBottom:4}}>Equal split ({d.sel.length} log):</div>
+                              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                                {d.sel.map(m=>(
+                                  <span key={m} style={{background:"#fff",border:"1px solid #b7e4c7",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:700,color:"#1a4731"}}>
+                                    {shortName(m)}: {eachQty}kg = {fmt(eachCost)}
+                                  </span>
                                 ))}
-                                {/* total check */}
-                                <div style={{fontSize:12,marginTop:4,padding:"6px 10px",borderRadius:8,background:Math.abs(Object.values(dist.customQtys).reduce((s,v)=>s+v,0)-item.qty)<0.01?"#e8f5e9":"#fdecea"}}>
-                                  {Math.abs(Object.values(dist.customQtys).reduce((s,v)=>s+v,0)-item.qty)<0.01
-                                    ?`✅ Total matches: ${item.qty} kg`
-                                    :`⚠️ Total: ${Object.values(dist.customQtys).reduce((s,v)=>s+v,0).toFixed(2)} kg (chahiye: ${item.qty} kg)`
-                                  }
-                                </div>
                               </div>
-                            )}
+                            </div>
+                          )}
+
+                          {/* ── CUSTOM QTY MODE ── */}
+                          {d.customMode&&(
+                            <div style={{background:"#fffbf0",border:"1.5px solid #f4d03f",borderRadius:12,padding:12,marginBottom:10}}>
+                              <div style={{fontSize:12,fontWeight:800,color:"#b7770d",marginBottom:8}}>
+                                Custom quantity — Total chahiye: {item.qty} kg
+                                <span style={{marginLeft:8,color:customOk?"#2d6a4f":"#e63946"}}>
+                                  {customOk?"✅ Sahi hai":"⚠️ "+customTotal.toFixed(2)+" kg"}
+                                </span>
+                              </div>
+                              {d.sel.map(m=>(
+                                <div key={m} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                                  <div style={{width:36,height:36,borderRadius:"50%",background:"#2d6a4f",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>
+                                    {initials(m)}
+                                  </div>
+                                  <span style={{fontSize:13,fontWeight:700,flex:1}}>{shortName(m)}</span>
+                                  <button style={{...S.qtyBtn}} onClick={()=>setCustomQty(item.id,m,Math.max(0,((parseFloat(d.customQtys[m])||0)-0.5)))}>−</button>
+                                  <input type="number" min="0" step="0.5"
+                                    style={{width:58,textAlign:"center",fontWeight:800,fontSize:14,border:"1.5px solid #f4d03f",borderRadius:8,padding:"5px 2px",background:"#fff",fontFamily:"inherit"}}
+                                    value={d.customQtys[m]!==undefined?d.customQtys[m]:""}
+                                    placeholder="0"
+                                    onChange={e=>setCustomQty(item.id,m,e.target.value)}
+                                  />
+                                  <button style={{...S.qtyBtn}} onClick={()=>setCustomQty(item.id,m,((parseFloat(d.customQtys[m])||0)+0.5))}>+</button>
+                                  <span style={{fontSize:11,color:"#888",minWidth:48,textAlign:"right"}}>{fmt(pricePerKg*(parseFloat(d.customQtys[m])||0))}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* ── ITEM ACTION BUTTONS ── */}
+                          <div style={{display:"flex",gap:8,marginTop:4}}>
+                            <button onClick={()=>toggleCustom(item.id)} style={{
+                              ...S.btn,flex:1,padding:"9px 10px",fontSize:12,
+                              background:d.customMode?"#fff9e6":"#f0f0f0",
+                              color:d.customMode?"#b7770d":"#555",
+                              border:`1.5px solid ${d.customMode?"#f4d03f":"#ddd"}`,
+                            }}>
+                              {d.customMode?"✏️ Custom ON":"✏️ Custom Qty"}
+                            </button>
+                            <button onClick={()=>confirmItem(item.id)} style={{
+                              ...S.btn,flex:1,padding:"9px 10px",fontSize:12,
+                              background:d.confirmed?"#e8f5e9":"#2d6a4f",
+                              color:d.confirmed?"#2d6a4f":"#fff",
+                              border:`1.5px solid ${d.confirmed?"#2d6a4f":"transparent"}`,
+                            }}>
+                              {d.confirmed?"✅ Confirmed!":"✔ Confirm Item"}
+                            </button>
                           </div>
                         </div>
                       );
                     })}
 
-                    {/* Bill preview */}
-                    {selTrip.orders.length>0&&(
-                      <>
-                        <p style={{...S.label,marginTop:8}}>💰 Bill Preview</p>
-                        {Object.entries(calcSmartSplit(selTrip)).map(([member,d])=>(
-                          <div key={member} style={S.billCard}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                                <div style={{width:38,height:38,borderRadius:"50%",background:"#2d6a4f",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13}}>
-                                  {initials(member)}
-                                </div>
-                                <b style={{fontSize:14}}>{member}</b>
-                              </div>
-                              <span style={S.amountBadge}>{fmt(d.amount)}</span>
-                            </div>
-                            <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
-                              {d.items.map(i=><span key={i.name} style={S.itemTag}>{EMOJI_MAP[i.name]||"🛒"} {i.name} × {i.qty}</span>)}
-                            </div>
-                            <button
-                              onClick={()=>sendWhatsApp(member,d,selTrip.date,(selTrip.travelExpense||0)/Object.keys(calcSmartSplit(selTrip)).length,selTrip.items)}
-                              style={{marginTop:10,width:"100%",padding:"9px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                              <span>📲</span> WhatsApp {shortName(member)}
-                            </button>
+                    {/* ── FINALIZE SECTION ── */}
+                    {selTrip.status!=="settled"&&(
+                      <div style={{background:"#fff",borderRadius:18,padding:16,marginTop:4,boxShadow:"0 2px 16px rgba(0,0,0,0.08)",border:"2px solid #e8f5e9"}}>
+                        {/* Progress */}
+                        <div style={{marginBottom:12}}>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:"#555",marginBottom:6}}>
+                            <span>Items confirmed</span>
+                            <span style={{color:"#2d6a4f"}}>{selTrip.items.filter(i=>dist[i.id]?.confirmed).length} / {selTrip.items.length}</span>
                           </div>
-                        ))}
-                      </>
-                    )}
+                          <div style={{background:"#e8f5e9",borderRadius:20,height:8}}>
+                            <div style={{background:"#2d6a4f",borderRadius:20,height:8,width:`${selTrip.items.length>0?(selTrip.items.filter(i=>dist[i.id]?.confirmed).length/selTrip.items.length)*100:0}%`,transition:"width 0.4s"}}/>
+                          </div>
+                        </div>
 
-                    {selTrip.status!=="settled"&&selTrip.orders.length>0&&(
-                      <button
-                        onClick={()=>sendAllWhatsApp(calcSmartSplit(selTrip),selTrip.date,selTrip.travelExpense||0,selTrip.items)}
-                        style={{...S.btn,width:"100%",marginTop:10,fontSize:14,background:"#25D366",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                        📲 WhatsApp - Sabko Bhejo
-                      </button>
+                        {/* Calculate bill preview button */}
+                        <button onClick={finalizeSplit} style={{...S.btn,width:"100%",background:"#1a4731",color:"#fff",fontSize:14,marginBottom:10}}>
+                          🧮 Calculate & Preview Bills
+                        </button>
+
+                        {/* Bill preview after finalize */}
+                        {finalBill&&(
+                          <>
+                            <div style={{fontSize:13,fontWeight:800,color:"#555",marginBottom:10}}>💰 Final Bill Preview:</div>
+                            {Object.entries(finalBill).map(([member,bd])=>(
+                              <div key={member} style={{...S.billCard,marginBottom:8}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                    <div style={{width:38,height:38,borderRadius:"50%",background:"#2d6a4f",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13}}>
+                                      {initials(member)}
+                                    </div>
+                                    <div>
+                                      <b style={{fontSize:14}}>{member}</b>
+                                      <div style={{fontSize:11,color:"#888"}}>{bd.items.length} items</div>
+                                    </div>
+                                  </div>
+                                  <span style={S.amountBadge}>{fmt(bd.amount)}</span>
+                                </div>
+                                {/* Item breakdown */}
+                                <div style={{background:"#f8fdf8",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
+                                  {bd.items.map(i=>(
+                                    <div key={i.name} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
+                                      <span>{EMOJI_MAP[i.name]||"🛒"} {i.name} × {i.qty}kg</span>
+                                      <span style={{fontWeight:700,color:"#2d6a4f"}}>{fmt(i.price)}</span>
+                                    </div>
+                                  ))}
+                                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3,color:"#888"}}>
+                                    <span>🚗 Travel share</span>
+                                    <span>{fmt((selTrip.travelExpense||0)/Object.keys(finalBill).length)}</span>
+                                  </div>
+                                </div>
+                                {/* WhatsApp button per person */}
+                                <button
+                                  onClick={()=>sendWhatsApp(member,bd,selTrip.date,(selTrip.travelExpense||0)/Object.keys(finalBill).length,selTrip.items)}
+                                  style={{width:"100%",padding:"9px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                                  📲 WhatsApp {shortName(member)}
+                                </button>
+                              </div>
+                            ))}
+
+                            {/* Send all WA */}
+                            <button
+                              onClick={()=>sendAllWhatsApp(finalBill,selTrip.date,selTrip.travelExpense||0,selTrip.items)}
+                              style={{...S.btn,width:"100%",marginBottom:10,fontSize:14,background:"#128C7E",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                              📲 Sabko WhatsApp Bhejo
+                            </button>
+
+                            {/* Final settle button */}
+                            <button
+                              onClick={()=>{
+                                if(!finalBill||!Object.keys(finalBill).length)return showToast("Pehle calculate karo!","#e63946");
+                                setData(s=>{
+                                  const nl={...s.ledger};
+                                  Object.entries(finalBill).forEach(([m,d])=>{
+                                    nl[m]={...nl[m],bills:[...nl[m].bills,{tripId:selTrip.id,date:selTrip.date,amount:d.amount,items:d.items}]};
+                                  });
+                                  return{...s,ledger:nl,trips:s.trips.map(t=>t.id===selTrip.id?{...t,status:"settled"}:t)};
+                                });
+                                showToast("✅ Bills sabko bhej diye!");
+                              }}
+                              style={{...S.btn,...S.btnGreen,width:"100%",fontSize:15}}>
+                              ✅ Final Karo & Sabko Bill Bhejo
+                            </button>
+                          </>
+                        )}
+                      </div>
                     )}
-                    {selTrip.status!=="settled"&&selTrip.orders.length>0&&(
-                      <button style={{...S.btn,...S.btnGreen,width:"100%",marginTop:10,fontSize:15}}
-                        onClick={()=>{
-                          const split=calcSmartSplit(selTrip);
-                          if(!Object.keys(split).length)return showToast("No orders!","#e63946");
-                          setData(s=>{
-                            const nl={...s.ledger};
-                            Object.entries(split).forEach(([m,d])=>{nl[m]={...nl[m],bills:[...nl[m].bills,{tripId:selTrip.id,date:selTrip.date,amount:d.amount,items:d.items}]};});
-                            return{...s,ledger:nl,trips:s.trips.map(t=>t.id===selTrip.id?{...t,status:"settled"}:t)};
-                          });
-                          showToast("✅ Bills sent!");
-                        }}>
-                        ✅ Finalise & Send Bills to All
-                      </button>
-                    )}
-                    {selTrip.status==="settled"&&<div style={{textAlign:"center",padding:16,color:"#457b9d",fontWeight:800,fontSize:15}}>✅ Bills already sent</div>}
+                    {selTrip.status==="settled"&&<div style={{textAlign:"center",padding:16,color:"#457b9d",fontWeight:800,fontSize:15,background:"#fff",borderRadius:14,marginTop:8}}>✅ Is trip ke bills bhej diye ja chuke hain</div>}
                   </>
                 )}
               </>
@@ -959,107 +1046,4 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
           </>
         )}
 
-        {tab==="payments"&&(
-          <>
-            <p style={S.label}>Record Payment Received</p>
-            <select style={S.select} value={payMember} onChange={e=>setPayMember(e.target.value)}>
-              <option value="">— Member ਚੁਣੋ —</option>
-              {MEMBERS.map(m=><option key={m} value={m}>{m} · owes {fmt(getBalance(m))}</option>)}
-            </select>
-            <div style={{display:"flex",gap:8,marginTop:8}}>
-              <input style={{...S.input,flex:1}} placeholder="Amount ₹" type="number" value={payAmount} onChange={e=>setPayAmount(e.target.value)}/>
-              <input style={{...S.input,flex:1}} placeholder="Note (opt)" value={payNote} onChange={e=>setPayNote(e.target.value)}/>
-            </div>
-            <button style={{...S.btn,...S.btnGreen,marginTop:10,width:"100%"}} onClick={recordPayment}>💵 Record Payment</button>
-            <p style={{...S.label,marginTop:24}}>All Members Balance</p>
-            {MEMBERS.map(m=>{
-              const bal=getBalance(m),l=data.ledger[m];
-              return(
-                <div key={m} style={S.memberBalCard}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <b style={{fontSize:14}}>👤 {m}</b>
-                      <div style={{fontSize:11,color:"#888",marginTop:2}}>Billed: {fmt(l.bills.reduce((s,b)=>s+b.amount,0))} · Paid: {fmt(l.payments.reduce((s,p)=>s+p.amount,0))}</div>
-                    </div>
-                    <span style={{...S.amountBadge,fontSize:13,background:bal>0?"#e63946":bal<0?"#2d6a4f":"#888"}}>{bal>0?`Owes ${fmt(bal)}`:bal<0?`Cr ${fmt(-bal)}`:"✓ Clear"}</span>
-                  </div>
-                  {bal>0&&(
-                    <button onClick={()=>{
-                      const phone=getPhone(m);
-                      if(!phone||phone.includes("X")){alert("Phone number update karo!");return;}
-                      const msg=`Sat Sri Akal ${shortName(m)} Ji 🙏
-
-Aapka Sabji Mandi balance hai: *₹${bal.toFixed(2)}*
-Kripaya payment kar do. Shukriya!`;
-                      window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
-                    }} style={{marginTop:8,width:"100%",padding:"8px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
-                      📲 Payment Remind - {shortName(m)}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function App(){
-  const [data,setDataRaw]=React.useState(null);
-  const [view,setView]=React.useState("home");
-  const [selMember,setSelMember]=React.useState("");
-  const [pinInput,setPinInput]=React.useState("");
-  const [pinError,setPinError]=React.useState(false);
-  const [toast,setToast]=React.useState(null);
-  const [saving,setSaving]=React.useState(false);
-  const pollRef=React.useRef(null);
-
-  React.useEffect(()=>{
-    dbLoad().then(d=>{setDataRaw(d||EMPTY_DATA);});
-    pollRef.current=setInterval(()=>{dbLoad().then(d=>{if(d)setDataRaw(d);});},10000);
-    return()=>clearInterval(pollRef.current);
-  },[]);
-
-  const setData=React.useCallback((updater)=>{
-    setSaving(true);
-    setDataRaw(prev=>{
-      const next=typeof updater==="function"?updater(prev):updater;
-      dbSave(next).finally(()=>setSaving(false));
-      return next;
-    });
-  },[]);
-
-  function showToast(msg,color="#2d6a4f"){setToast({msg,color});setTimeout(()=>setToast(null),2800);}
-  function getBalance(member){const l=data?.ledger?.[member];if(!l)return 0;return l.bills.reduce((s,b)=>s+b.amount,0)-l.payments.reduce((s,p)=>s+p.amount,0);}
-  function enterAdmin(){if(pinInput===ADMIN_PIN){setPinError(false);setPinInput("");setView("admin");}else setPinError(true);}
-
-  const activeTrip=data?.trips?.find(t=>t.status==="open");
-
-  if(!data)return(
-    <div style={{...S.root,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
-      <div style={{textAlign:"center",color:"#2d6a4f"}}>
-        <div style={{fontSize:56,marginBottom:14}}>🛒</div>
-        <div style={{fontWeight:800,fontSize:17}}>Loading Sabji Mandi…</div>
-      </div>
-    </div>
-  );
-
-  return(
-    <div style={S.root}>
-      {saving&&<div style={S.savingBar}>💾 Saving…</div>}
-      {toast&&<div style={{...S.toast,background:toast.color}}>{toast.msg}</div>}
-      {view==="home"&&<HomeScreen setView={setView} selMember={selMember} setSelMember={setSelMember} getBalance={getBalance}/>}
-      {view==="customer"&&<CustomerScreen data={data} setData={setData} activeTrip={activeTrip} member={selMember} setView={setView} showToast={showToast} getBalance={getBalance}/>}
-      {view==="adminPin"&&<PinScreen pinInput={pinInput} setPinInput={setPinInput} pinError={pinError} enterAdmin={enterAdmin} setView={setView}/>}
-      {view==="admin"&&<AdminScreen data={data} setData={setData} setView={setView} showToast={showToast} getBalance={getBalance}/>}
-    </div>
-  );
-}
-
-const root=ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App/>);
-</script>
-</body>
-</html>
+>
