@@ -1209,28 +1209,24 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   <button onClick={()=>{
                     const phone=getPhone(accMember);
                     if(!phone){ alert("Phone nahi mila!"); return; }
-                    const billLines=[...l.bills].reverse().map((b,i)=>`  📌 Bill ${i+1}: ${fmt(b.amount)} — ${b.date}`).join("
-")||"  Koi bill nahi";
-                    const payLines=[...l.payments].reverse().map((p,i)=>`  ✅ Payment ${i+1}: ${fmt(p.amount)} — ${p.date} (${p.note||""})`).join("
-")||"  Koi payment nahi";
+                    const sep="\n";
+                    const billLines=[...l.bills].reverse().map((b,i)=>"  Bill "+(i+1)+": "+fmt(b.amount)+" ("+b.date+")").join(sep)||"  Koi bill nahi";
+                    const payLines=[...l.payments].reverse().map((p,i)=>"  Payment "+(i+1)+": +"+fmt(p.amount)+" ("+p.date+") "+(p.note||"")).join(sep)||"  Koi payment nahi";
                     const bal=getBalance(accMember);
-                    const msg=`📋 *Sabji Mandi — Full Account Statement*
-👤 *${accMember}*
-━━━━━━━━━━━━━━━
-
-🧾 *Bills:*
-${billLines}
-
-💵 *Payments:*
-${payLines}
-
-━━━━━━━━━━━━━━━
-🧾 Total Billed: ${fmt(totalBilled)}
-💵 Total Paid: ${fmt(totalPaid)}
-💰 *Balance: ${bal>0?`Owes ${fmt(bal)}`:bal<0?`Credit ${fmt(-bal)}`:"Sab clear ✓"}*
-━━━━━━━━━━━━━━━
-Shukriya! 🙏`;
-                    window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
+                    const balText=bal>0?"Owes "+fmt(bal):bal<0?"Credit "+fmt(-bal):"Clear";
+                    const parts=[
+                      "Sabji Mandi - Account Statement",
+                      accMember,
+                      "--------",
+                      "Bills:",billLines,"",
+                      "Payments:",payLines,"",
+                      "--------",
+                      "Total Billed: "+fmt(totalBilled),
+                      "Total Paid: "+fmt(totalPaid),
+                      "Balance: "+balText,
+                      "Shukriya!"
+                    ];
+                    window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(parts.join(sep)),"_blank");
                   }} style={{...S.btn,width:"100%",marginTop:8,background:"#25D366",color:"#fff",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                     📲 Full Statement
                   </button>
