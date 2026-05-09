@@ -6,32 +6,27 @@
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-title" content="Sabji Mandi"/>
-  <title>Sabji Mandi</title>
+  <title>Sabji Mandi 🛒</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#f2f7f3;font-family:'Nunito','Segoe UI',sans-serif;}
     #root{min-height:100vh;}
-    .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;color:#2d6a4f;}
-    .loading div:first-child{font-size:56px;margin-bottom:14px;}
-    .loading div:last-child{font-weight:800;font-size:17px;}
   </style>
 </head>
 <body>
-  <div id="root">
-    <div class="loading">
-      <div>🛒</div>
-      <div>Loading Sabji Mandi...</div>
-    </div>
-  </div>
+<div id="root"><div style="display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;color:#2d6a4f;"><div style="font-size:56px;margin-bottom:14px">🛒</div><div style="font-weight:800;font-size:17px">Loading Sabji Mandi…</div><div style="font-size:12px;color:#aaa;margin-top:8px">Database se connect ho raha hai…</div></div></div>
 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel" data-presets="react">
+const {useState,useEffect,useCallback,useRef} = React;
 
+// ── CONFIG ──────────────────────────────────────────────────
 const SUPABASE_URL  = "https://wsqwyygjywrmmhfayfwd.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzcXd5eWdqeXdybW1oZmF5ZndkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MjkxNDMsImV4cCI6MjA5MzIwNTE0M30.27D6sscdoxEuRWtvuwETqABjycQfV5BcSWeq5Bjtu8E";
 const ROW_ID        = "main";
+const ADMIN_PIN     = "1234";
 
 const MEMBERS_DATA = [
   {name:"Kuldeep Singh",    phone:"918168016452"},
@@ -41,11 +36,11 @@ const MEMBERS_DATA = [
   {name:"Gurpreet Singh",   phone:"919813915600"},
 ];
 const MEMBERS = MEMBERS_DATA.map(m=>m.name);
-function getPhone(name){ const m=MEMBERS_DATA.find(x=>x.name===name); return m?m.phone:""; }
-const ADMIN_PIN = "1234";
+function getPhone(n){ const m=MEMBERS_DATA.find(x=>x.name===n); return m?m.phone:""; }
 
+// ── CATEGORIES ───────────────────────────────────────────────
 const CATEGORIES = {
-  Vegetables: [
+  Vegetables:[
     {name:"Tamatar",emoji:"🍅"},{name:"Aloo",emoji:"🥔"},
     {name:"Pyaz",emoji:"🧅"},{name:"Lehsun",emoji:"🧄"},
     {name:"Adrak",emoji:"🫚"},{name:"Palak",emoji:"🥬"},
@@ -60,7 +55,7 @@ const CATEGORIES = {
     {name:"Ghiya",emoji:"🫙"},{name:"Tinde",emoji:"🫑"},
     {name:"Chaule",emoji:"🫘"},
   ],
-  Fruits: [
+  Fruits:[
     {name:"Apple",emoji:"🍎"},{name:"Banana",emoji:"🍌"},
     {name:"Mango",emoji:"🥭"},{name:"Orange",emoji:"🍊"},
     {name:"Grapes",emoji:"🍇"},{name:"Watermelon",emoji:"🍉"},
@@ -69,101 +64,73 @@ const CATEGORIES = {
     {name:"Coconut",emoji:"🥥"},{name:"Pineapple",emoji:"🍍"},
     {name:"Kiwi",emoji:"🥝"},
   ],
-  Salad: [
+  Salad:[
     {name:"Kheera",emoji:"🥒"},{name:"Lettuce",emoji:"🥗"},
     {name:"Chukandar",emoji:"❤️"},{name:"Pudina",emoji:"🌿"},
     {name:"Hara Pyaz",emoji:"🧅"},{name:"Cherry Tamatar",emoji:"🍒"},
-    {name:"Celery",emoji:"🌱"},{name:"Broccoli",emoji:"🥦"},
-    {name:"Khakhadi",emoji:"🥒"},{name:"Taar",emoji:"🌿"},
+    {name:"Broccoli",emoji:"🥦"},{name:"Khakhadi",emoji:"🥒"},
+    {name:"Taar",emoji:"🌿"},
   ],
 };
 
 const EMOJI_MAP = {};
-Object.values(CATEGORIES).flat().forEach(i => { EMOJI_MAP[i.name] = i.emoji; });
+Object.values(CATEGORIES).flat().forEach(i=>{ EMOJI_MAP[i.name]=i.emoji; });
 
-function sendWhatsApp(member, billData, tripDate, travelShare, allPurchased) {
-  const phone = getPhone(member);
-  if(!phone || phone.includes("X")) {
-    alert("Pehle " + member + " ka phone number update karo!");
-    return;
-  }
-  const items = billData.items || [];
-  const itemLines = items.map(i => {
-    const purchased = allPurchased ? allPurchased.find(p => p.name === i.name) : null;
-    let pricePerUnit = 0;
-    if(purchased && purchased.qty > 0) pricePerUnit = purchased.totalCost / purchased.qty;
-    const itemTotal = pricePerUnit * i.qty;
-    const priceStr = purchased ? ` @ ₹${pricePerUnit.toFixed(0)}/kg = *₹${itemTotal.toFixed(2)}*` : "";
-    return `  • ${EMOJI_MAP[i.name]||"🛒"} ${i.name}: ${i.qty} kg${priceStr}`;
-  }).join("\n");
-  const itemsTotal = billData.amount - travelShare;
-  const msg =
-`🛒 *Sabji Mandi Bill*
-━━━━━━━━━━━━━━━
-📅 Trip: ${tripDate}
-👤 *${member}*
-━━━━━━━━━━━━━━━
+// ── HELPERS ──────────────────────────────────────────────────
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function fmt(n){ return "₹"+Number(n||0).toFixed(2); }
+function shortName(n){ return n.split(" ")[0]; }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function initials(n){ return n.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
+const blankLedger=()=>Object.fromEntries(MEMBERS.map(m=>[m,{payments:[],bills:[]}]));
+const EMPTY_DATA={trips:[],ledger:blankLedger()};
 
-🧺 *Aapka Samaan:*
-${itemLines || "  (koi item nahi)"}
+// ── DATABASE ─────────────────────────────────────────────────
+const DBH={"Content-Type":"application/json","apikey":SUPABASE_ANON,"Authorization":"Bearer "+SUPABASE_ANON};
 
-━━━━━━━━━━━━━━━
-🧾 Items total: ₹${itemsTotal.toFixed(2)}
-🚗 Travel share: ₹${travelShare.toFixed(2)}
-💰 *Kul Bill: ₹${billData.amount.toFixed(2)}*
-━━━━━━━━━━━━━━━
-
-Please jaldi payment karo. Shukriya! 🙏`;
-
-  const url = "https://wa.me/" + phone + "?text=" + encodeURIComponent(msg);
-  window.open(url, "_blank");
-}
-
-function sendAllWhatsApp(splitResult, tripDate, travelExpense, allPurchased) {
-  const numHouses = Object.keys(splitResult).length || 1;
-  const travelShare = (travelExpense||0) / numHouses;
-  let delay = 0;
-  Object.entries(splitResult).forEach(([member, data]) => {
-    setTimeout(() => sendWhatsApp(member, data, tripDate, travelShare, allPurchased), delay);
-    delay += 800;
-  });
-}
-
-function uid()        { return Math.random().toString(36).slice(2,9); }
-function fmt(n)       { return "₹" + Number(n||0).toFixed(2); }
-function shortName(n) { return n.split(" ")[0]; }
-function todayStr()   { return new Date().toISOString().slice(0,10); }
-const blankLedger = () => Object.fromEntries(MEMBERS.map(m=>[m,{payments:[],bills:[]}]));
-const EMPTY_DATA  = {trips:[],ledger:blankLedger()};
-
-const dbH = {
-  "Content-Type":"application/json",
-  "apikey":SUPABASE_ANON,
-  "Authorization":"Bearer "+SUPABASE_ANON,
-};
-
-async function dbLoad() {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/mandi_data?id=eq.${ROW_ID}&select=payload`,{headers:dbH});
-    if(!r.ok){console.error("load",r.status,await r.text());return null;}
-    const rows = await r.json();
-    if(rows.length && rows[0].payload) return rows[0].payload;
-  } catch(e){console.error("load ex",e);}
+async function dbLoad(){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/mandi_data?id=eq.${ROW_ID}&select=payload`,{headers:DBH});
+    if(!r.ok) return null;
+    const rows=await r.json();
+    if(rows.length&&rows[0].payload) return rows[0].payload;
+  }catch(e){ console.error("dbLoad",e); }
   return null;
 }
-
-async function dbSave(data) {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/mandi_data`,{
+async function dbSave(data){
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/mandi_data`,{
       method:"POST",
-      headers:{...dbH,"Prefer":"resolution=merge-duplicates,return=minimal"},
+      headers:{...DBH,"Prefer":"resolution=merge-duplicates,return=minimal"},
       body:JSON.stringify({id:ROW_ID,payload:data,updated_at:new Date().toISOString()}),
     });
-    if(!r.ok) console.error("save",r.status,await r.text());
-  } catch(e){console.error("save ex",e);}
+  }catch(e){ console.error("dbSave",e); }
 }
 
-const S = {
+// ── WHATSAPP ─────────────────────────────────────────────────
+function sendWA(member, billData, tripDate, travelShare, purchasedItems){
+  const phone=getPhone(member);
+  if(!phone){ alert("Phone number nahi mila!"); return; }
+  const items=billData.items||[];
+  const lines=items.map(i=>{
+    const p=purchasedItems?purchasedItems.find(x=>x.name===i.name):null;
+    const rate=p&&p.qty>0?p.totalCost/p.qty:0;
+    const total=rate*(i.qty||0);
+    return `  • ${EMOJI_MAP[i.name]||"🛒"} ${i.name}: ${i.qty}kg${rate>0?` @ ₹${rate.toFixed(0)}/kg = ₹${total.toFixed(2)}`:""}`;
+  }).join("\n");
+  const itemsAmt=(billData.amount||0)-travelShare;
+  const msg=`🛒 *Sabji Mandi Bill*\n━━━━━━━━━━━━━━━\n📅 Trip: ${tripDate}\n👤 *${member}*\n━━━━━━━━━━━━━━━\n\n🧺 *Aapka Samaan:*\n${lines||"  (koi item nahi)"}\n\n━━━━━━━━━━━━━━━\n🧾 Items: ₹${itemsAmt.toFixed(2)}\n🚗 Travel: ₹${travelShare.toFixed(2)}\n💰 *Kul Bill: ₹${(billData.amount||0).toFixed(2)}*\n━━━━━━━━━━━━━━━\n\nPlease jaldi payment karo 🙏`;
+  window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
+}
+function sendAllWA(splitResult, tripDate, travelExp, purchasedItems){
+  const n=Object.keys(splitResult).length||1;
+  const share=(travelExp||0)/n;
+  let delay=0;
+  Object.entries(splitResult).forEach(([m,d])=>{ setTimeout(()=>sendWA(m,d,tripDate,share,purchasedItems),delay); delay+=800; });
+}
+
+// ── STYLES ───────────────────────────────────────────────────
+const S={
   root:{fontFamily:"'Nunito','Segoe UI',sans-serif",background:"#f2f7f3",minHeight:"100vh",maxWidth:480,margin:"0 auto"},
   screen:{minHeight:"100vh",background:"#f2f7f3"},
   homeBg:{position:"absolute",top:0,left:0,right:0,height:295,background:"linear-gradient(135deg,#1a4731 0%,#2d6a4f 50%,#52b788 100%)",borderRadius:"0 0 48px 48px"},
@@ -176,7 +143,7 @@ const S = {
   headerTitle:{color:"#fff",fontWeight:800,fontSize:16},
   headerSub:{color:"rgba(255,255,255,0.7)",fontSize:11},
   backBtn:{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:10,padding:"7px 14px",fontSize:16,cursor:"pointer",fontFamily:"inherit"},
-  balanceBanner:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 20px",color:"#fff"},
+  balBanner:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 20px",color:"#fff"},
   tabs:{display:"flex",background:"#fff",borderBottom:"1px solid #e8f0e8",position:"sticky",top:0,zIndex:10,overflowX:"auto"},
   tab:{flex:1,padding:"11px 4px",border:"none",background:"none",fontSize:11,fontWeight:700,color:"#999",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"},
   tabActive:{color:"#2d6a4f",borderBottom:"2.5px solid #2d6a4f"},
@@ -216,6 +183,7 @@ const S = {
   totalQtyBadge:{background:"linear-gradient(135deg,#1a4731,#2d6a4f)",color:"#fff",borderRadius:12,padding:"8px 14px",fontWeight:900,fontSize:20,minWidth:52,textAlign:"center"},
 };
 
+// ── HEADER ───────────────────────────────────────────────────
 function Header({title,subtitle,onBack}){
   return(
     <div style={S.header}>
@@ -229,6 +197,7 @@ function Header({title,subtitle,onBack}){
   );
 }
 
+// ── HOME ─────────────────────────────────────────────────────
 function HomeScreen({setView,selMember,setSelMember,getBalance}){
   return(
     <div style={S.screen}>
@@ -240,13 +209,11 @@ function HomeScreen({setView,selMember,setSelMember,getBalance}){
         <div style={S.card}>
           <p style={S.label}>ਆਪਣਾ ਨਾਮ ਚੁਣੋ:</p>
           {MEMBERS.map(m=>{
-            const bal=getBalance(m),sel=selMember===m;
+            const sel=selMember===m;
             return(
               <button key={m} onClick={()=>setSelMember(m)} style={{...S.memberBtn,background:sel?"#2d6a4f":"#f0faf4",border:`2px solid ${sel?"#2d6a4f":"#d8eadf"}`,color:sel?"#fff":"#1b1b1b"}}>
                 <span style={{fontWeight:700,fontSize:14}}>👤 {m}</span>
-                <span style={{fontSize:12,color:sel?"rgba(255,255,255,0.7)":"#aaa"}}>
-                  {sel?"Selected ✓":"Tap to select"}
-                </span>
+                <span style={{fontSize:12,color:sel?"rgba(255,255,255,0.8)":"#aaa"}}>{sel?"Selected ✓":"Tap to select"}</span>
               </button>
             );
           })}
@@ -260,6 +227,7 @@ function HomeScreen({setView,selMember,setSelMember,getBalance}){
   );
 }
 
+// ── PIN ──────────────────────────────────────────────────────
 function PinScreen({pinInput,setPinInput,pinError,enterAdmin,setView}){
   return(
     <div style={{...S.screen,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -267,12 +235,12 @@ function PinScreen({pinInput,setPinInput,pinError,enterAdmin,setView}){
         <div style={{textAlign:"center",marginBottom:16}}>
           <div style={{fontSize:44}}>🔐</div>
           <h2 style={{margin:"8px 0 4px",fontSize:20}}>Admin Access</h2>
-          <p style={{color:"#888",fontSize:13,margin:0}}>Enter 4-digit PIN</p>
+          <p style={{color:"#888",fontSize:13,margin:0}}>4-digit PIN daalo</p>
         </div>
         <input type="password" maxLength={4} style={{...S.input,letterSpacing:10,fontSize:24,textAlign:"center"}}
           value={pinInput} onChange={e=>setPinInput(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&enterAdmin()} placeholder="••••"/>
-        {pinError&&<p style={{color:"#e63946",fontSize:13,textAlign:"center"}}>Wrong PIN!</p>}
+        {pinError&&<p style={{color:"#e63946",fontSize:13,textAlign:"center",marginTop:6}}>Wrong PIN!</p>}
         <div style={{display:"flex",gap:10,marginTop:14}}>
           <button style={{...S.btn,...S.btnGhost,flex:1}} onClick={()=>setView("home")}>Back</button>
           <button style={{...S.btn,...S.btnGreen,flex:1}} onClick={enterAdmin}>Enter</button>
@@ -283,59 +251,75 @@ function PinScreen({pinInput,setPinInput,pinError,enterAdmin,setView}){
   );
 }
 
+// ── CUSTOMER ─────────────────────────────────────────────────
 function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBalance}){
-  const [tab,setTab]=React.useState("order");
-  const [myOrders,setMyOrders]=React.useState({});
-  const [submitted,setSubmitted]=React.useState(false);
-  const [activeCat,setActiveCat]=React.useState("Vegetables");
-  const [searchQ,setSearchQ]=React.useState("");
-  const [customItem,setCustomItem]=React.useState("");
-  const [customQty,setCustomQty]=React.useState("");
-  const [customList,setCustomList]=React.useState([]);
-  const ledger=data.ledger?.[member]||{payments:[],bills:[]};
+  const [tab,setTab]=useState("order");
+  const [myOrders,setMyOrders]=useState({});
+  const [submitted,setSubmitted]=useState(false);
+  const [activeCat,setActiveCat]=useState("Vegetables");
+  const [searchQ,setSearchQ]=useState("");
+  const [customItem,setCustomItem]=useState("");
+  const [customQty,setCustomQty]=useState("");
+  const [customList,setCustomList]=useState([]);
+
+  const ledger=data.ledger&&data.ledger[member]?data.ledger[member]:{payments:[],bills:[]};
   const balance=getBalance(member);
-  const existingOrder=activeTrip?.orders?.find(o=>o.member===member);
-  React.useEffect(()=>{
-    if(existingOrder){const map={};existingOrder.items.forEach(i=>{map[i.name]=i.qty;});setMyOrders(map);setSubmitted(true);}
-    else{setMyOrders({});setSubmitted(false);}
-  },[activeTrip?.id,member]);
-  function setQty(name,val){setMyOrders(o=>({...o,[name]:Math.max(0,val)}));}
+  const existingOrder=activeTrip&&activeTrip.orders?activeTrip.orders.find(o=>o.member===member):null;
+
+  useEffect(()=>{
+    if(existingOrder){
+      const map={};
+      existingOrder.items.forEach(i=>{ if(!i.custom) map[i.name]=i.qty; });
+      setMyOrders(map);
+      setCustomList(existingOrder.items.filter(i=>i.custom));
+      setSubmitted(true);
+    } else { setMyOrders({}); setCustomList([]); setSubmitted(false); }
+  },[activeTrip?activeTrip.id:null,member]);
+
+  function setQty(name,val){ setMyOrders(o=>({...o,[name]:Math.max(0,val)})); }
+
   function addCustomItem(){
     const name=customItem.trim();
     const qty=parseFloat(customQty);
-    if(!name)return showToast("Item ka naam likho!","#e63946");
-    if(!qty||qty<=0)return showToast("Quantity bharo!","#e63946");
+    if(!name) return showToast("Item ka naam likho!","#e63946");
+    if(!qty||qty<=0) return showToast("Quantity bharo!","#e63946");
     setCustomList(l=>{
-      const existing=l.find(i=>i.name.toLowerCase()===name.toLowerCase());
-      if(existing) return l.map(i=>i.name.toLowerCase()===name.toLowerCase()?{...i,qty}:i);
-      return [...l,{name,qty}];
+      const ex=l.find(i=>i.name.toLowerCase()===name.toLowerCase());
+      if(ex) return l.map(i=>i.name.toLowerCase()===name.toLowerCase()?{...i,qty}:i);
+      return [...l,{name,qty,custom:true}];
     });
-    setCustomItem("");setCustomQty("");
-    showToast("✅ Custom item added!");
+    setCustomItem(""); setCustomQty("");
+    showToast("✅ Custom item add ho gaya!");
   }
-  function removeCustomItem(name){setCustomList(l=>l.filter(i=>i.name!==name));}
+
   function submitOrder(){
     const items=Object.entries(myOrders).filter(([,q])=>Number(q)>0).map(([name,qty])=>({name,qty:Number(qty)}));
-    const allItems=[...items,...customList.map(i=>({...i,custom:true}))];
-    if(!allItems.length)return showToast("ਕੋਈ ਚੀਜ਼ ਚੁਣੋ!","#e63946");
+    const allItems=[...items,...customList];
+    if(!allItems.length) return showToast("Koi item nahi chuna!","#e63946");
     setData(s=>{
       const trips=s.trips.map(t=>{
-        if(t.id!==activeTrip.id)return t;
+        if(!activeTrip||t.id!==activeTrip.id) return t;
         return{...t,orders:[...t.orders.filter(o=>o.member!==member),{id:uid(),member,items:allItems}]};
       });
       return{...s,trips};
     });
-    setSubmitted(true);showToast("✅ Order placed!");
+    setSubmitted(true); showToast("✅ Order place ho gaya!");
   }
+
   const totalBilled=ledger.bills.reduce((s,b)=>s+b.amount,0);
   const totalPaid=ledger.payments.reduce((s,p)=>s+p.amount,0);
+
+  const displayItems=searchQ
+    ?Object.values(CATEGORIES).flat().filter(i=>i.name.toLowerCase().includes(searchQ.toLowerCase()))
+    :CATEGORIES[activeCat]||[];
+
   return(
     <div style={S.screen}>
       <Header title={shortName(member)} subtitle={member} onBack={()=>setView("home")}/>
-      <div style={{...S.balanceBanner,background:balance>0?"linear-gradient(90deg,#c1121f,#e63946)":balance<0?"linear-gradient(90deg,#1a4731,#2d6a4f)":"linear-gradient(90deg,#444,#666)"}}>
+      <div style={{...S.balBanner,background:balance>0?"linear-gradient(90deg,#c1121f,#e63946)":balance<0?"linear-gradient(90deg,#1a4731,#2d6a4f)":"linear-gradient(90deg,#444,#666)"}}>
         <div>
-          <div style={{fontSize:11,opacity:0.8,marginBottom:2}}>Your Balance</div>
-          <div style={{fontSize:20,fontWeight:900}}>{balance>0?`You owe ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"All Clear ✓"}</div>
+          <div style={{fontSize:11,opacity:0.8,marginBottom:2}}>Aapka Balance</div>
+          <div style={{fontSize:20,fontWeight:900}}>{balance>0?`Aap doge ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"Sab Clear ✓"}</div>
         </div>
         <div style={{fontSize:36}}>{balance>0?"📤":balance<0?"💰":"✅"}</div>
       </div>
@@ -344,21 +328,15 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
           <button key={t} style={{...S.tab,...(tab===t?S.tabActive:{})}} onClick={()=>setTab(t)}>{label}</button>
         ))}
       </div>
+
       {tab==="order"&&(
-        <div style={{padding:"0 14px 100px"}}>
+        <div style={{padding:"0 14px 110px"}}>
           {!activeTrip?(
-            <div style={S.emptyBox}><div style={{fontSize:52}}>🛒</div><p style={S.emptyText}>ਕੋਈ ਟ੍ਰਿਪ ਨਹੀਂ ਹੈ।<br/>Admin ਟ੍ਰਿਪ ਬਣਾਵੇਗਾ।</p></div>
+            <div style={S.emptyBox}><div style={{fontSize:52}}>🛒</div><p style={S.emptyText}>Koi trip nahi hai.<br/>Admin trip banayega.</p></div>
           ):(
             <>
               <div style={S.tripBanner}><span>📅 Trip: <b>{activeTrip.date}</b></span><span style={{...S.badge,background:"#2d6a4f"}}>Open</span></div>
-              {/* Search bar */}
-              <input
-                style={{...S.input,marginBottom:10,marginTop:4,background:"#fff",paddingLeft:36,backgroundImage:"url('data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' fill=\'%23999\' viewBox=\'0 0 16 16\'><path d=\'M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z\'/></svg>')",backgroundRepeat:"no-repeat",backgroundPosition:"10px center"}}
-                placeholder="Search items..."
-                value={searchQ}
-                onChange={e=>setSearchQ(e.target.value)}
-              />
-              {/* Category pills - hidden when searching */}
+              <input style={{...S.input,marginBottom:10,marginTop:4}} placeholder="🔍 Item search karo..." value={searchQ} onChange={e=>setSearchQ(e.target.value)}/>
               {!searchQ&&(
                 <div style={{display:"flex",gap:8,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
                   {Object.keys(CATEGORIES).map(cat=>(
@@ -368,11 +346,7 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
                   ))}
                 </div>
               )}
-              {/* Items list */}
-              {(searchQ
-                ? Object.values(CATEGORIES).flat().filter(i=>i.name.toLowerCase().includes(searchQ.toLowerCase()))
-                : CATEGORIES[activeCat]
-              ).map(item=>{
+              {displayItems.map(item=>{
                 const qty=Number(myOrders[item.name]||0);
                 return(
                   <div key={item.name} style={S.itemRow}>
@@ -382,24 +356,18 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
                     </div>
                     <div style={S.qtyControl}>
                       <button style={{...S.qtyBtn,opacity:qty===0?0.3:1}} onClick={()=>setQty(item.name,qty-0.5)}>−</button>
-                      <input
-                        type="number"
-                        style={{width:44,textAlign:"center",fontWeight:800,fontSize:15,color:"#1a4731",border:"1.5px solid #d8eadf",borderRadius:8,padding:"3px 2px",background:"#f8fdf8",fontFamily:"inherit"}}
-                        value={qty>0?qty:""}
-                        placeholder="—"
-                        min="0"
-                        step="0.5"
-                        onChange={e=>{
-                          const v=parseFloat(e.target.value);
-                          setQty(item.name, isNaN(v)?0:Math.max(0,v));
-                        }}
+                      <input type="number" min="0" step="0.5"
+                        style={{width:44,textAlign:"center",fontWeight:800,fontSize:14,color:"#1a4731",border:"1.5px solid #d8eadf",borderRadius:8,padding:"3px 2px",background:"#f8fdf8",fontFamily:"inherit"}}
+                        value={qty>0?qty:""} placeholder="—"
+                        onChange={e=>{ const v=parseFloat(e.target.value); setQty(item.name,isNaN(v)?0:Math.max(0,v)); }}
                       />
                       <button style={S.qtyBtn} onClick={()=>setQty(item.name,qty+0.5)}>+</button>
                     </div>
                   </div>
                 );
               })}
-              {/* Custom item entry */}
+
+              {/* Custom item */}
               <div style={{background:"#fff",borderRadius:14,padding:14,marginTop:12,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",border:"1.5px dashed #b7e4c7"}}>
                 <p style={{...S.label,marginTop:0,color:"#2d6a4f"}}>✏️ Custom Item (jo list mein nahi)</p>
                 <div style={{display:"flex",gap:8}}>
@@ -412,7 +380,7 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
                     {customList.map(i=>(
                       <div key={i.name} style={{display:"flex",alignItems:"center",gap:4,background:"#fff9e6",border:"1.5px solid #f4d03f",borderRadius:8,padding:"3px 8px"}}>
                         <span style={{fontSize:12,fontWeight:700,color:"#b7770d"}}>✏️ {i.name} × {i.qty}</span>
-                        <button onClick={()=>removeCustomItem(i.name)} style={{background:"none",border:"none",color:"#e63946",cursor:"pointer",fontSize:14,fontWeight:800,padding:"0 2px"}}>×</button>
+                        <button onClick={()=>setCustomList(l=>l.filter(x=>x.name!==i.name))} style={{background:"none",border:"none",color:"#e63946",cursor:"pointer",fontSize:14,fontWeight:800,padding:"0 2px"}}>×</button>
                       </div>
                     ))}
                   </div>
@@ -421,7 +389,7 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
 
               {(Object.values(myOrders).some(q=>q>0)||customList.length>0)&&(
                 <div style={{...S.summaryCard,marginTop:14}}>
-                  <p style={{...S.label,marginTop:0}}>Your Order:</p>
+                  <p style={{...S.label,marginTop:0}}>Aapka Order:</p>
                   <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                     {Object.entries(myOrders).filter(([,q])=>q>0).map(([name,qty])=>(
                       <span key={name} style={S.itemTag}>{EMOJI_MAP[name]} {name} × {qty}</span>
@@ -432,32 +400,39 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
                   </div>
                 </div>
               )}
+
               <div style={S.stickyBottom}>
-                <button style={{...S.btn,...S.btnGreen,width:"100%"}} onClick={submitOrder}>{submitted?"✏️ Update Order":"✅ Place Order"}</button>
+                <button style={{...S.btn,...S.btnGreen,width:"100%"}} onClick={submitOrder}>
+                  {submitted?"✏️ Order Update Karo":"✅ Order Place Karo"}
+                </button>
               </div>
             </>
           )}
         </div>
       )}
+
       {tab==="account"&&(
         <div style={{padding:"0 14px 40px"}}>
           <div style={{...S.summaryCard,marginTop:14}}>
-            <div style={S.summaryRow}><span>Total Billed</span><b style={{color:"#e63946"}}>{fmt(totalBilled)}</b></div>
+            <div style={S.summaryRow}><span>Total Bill</span><b style={{color:"#e63946"}}>{fmt(totalBilled)}</b></div>
             <div style={S.summaryRow}><span>Total Paid</span><b style={{color:"#2d6a4f"}}>{fmt(totalPaid)}</b></div>
             <div style={{...S.summaryRow,borderTop:"1.5px solid #e8f5e9",paddingTop:10,marginTop:2}}>
               <span style={{fontWeight:800}}>Net Balance</span>
-              <b style={{fontSize:17,color:balance>0?"#e63946":"#2d6a4f"}}>{balance>0?`Owes ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"Settled ✓"}</b>
+              <b style={{fontSize:17,color:balance>0?"#e63946":"#2d6a4f"}}>
+                {balance>0?`Dena hai ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"Settled ✓"}
+              </b>
             </div>
           </div>
           <p style={S.label}>🧾 Trip Bills</p>
-          {ledger.bills.length===0?<div style={S.emptyBox}><p style={S.emptyText}>No bills yet.</p></div>
+          {ledger.bills.length===0
+            ?<div style={S.emptyBox}><p style={S.emptyText}>Koi bill nahi abhi tak.</p></div>
             :[...ledger.bills].reverse().map((bill,idx)=>(
               <div key={idx} style={{...S.histCard,borderLeft:"3px solid #e63946"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div><b style={{fontSize:14}}>🗓 {bill.date}</b><div style={{fontSize:11,color:"#888",marginTop:2}}>Mandi Trip</div></div>
                   <span style={{...S.amountBadge,background:"#e63946"}}>{fmt(bill.amount)}</span>
                 </div>
-                {bill.items?.length>0&&(
+                {bill.items&&bill.items.length>0&&(
                   <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
                     {bill.items.map(i=><span key={i.name} style={S.itemTag}>{EMOJI_MAP[i.name]||"🛒"} {i.name} × {i.qty}</span>)}
                   </div>
@@ -465,8 +440,9 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
               </div>
             ))
           }
-          <p style={S.label}>💵 Payments Made</p>
-          {ledger.payments.length===0?<div style={S.emptyBox}><p style={S.emptyText}>No payments yet.</p></div>
+          <p style={S.label}>💵 Payments</p>
+          {ledger.payments.length===0
+            ?<div style={S.emptyBox}><p style={S.emptyText}>Koi payment nahi abhi tak.</p></div>
             :[...ledger.payments].reverse().map((pay,idx)=>(
               <div key={idx} style={{...S.histCard,borderLeft:"3px solid #2d6a4f"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -482,46 +458,46 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
   );
 }
 
+// ── ADMIN ─────────────────────────────────────────────────────
 function AdminScreen({data,setData,setView,showToast,getBalance}){
-  const [tab,setTab]=React.useState("trips");
-  const [newDate,setNewDate]=React.useState(todayStr());
-  const [selTripId,setSelTripId]=React.useState(null);
-  const [purchCat,setPurchCat]=React.useState("Vegetables");
-  const [purchItem,setPurchItem]=React.useState("");
-  const [purchQty,setPurchQty]=React.useState("");
-  const [purchPrice,setPurchPrice]=React.useState("");
-  const [travelExp,setTravelExp]=React.useState("");
-  const [payMember,setPayMember]=React.useState("");
-  const [payAmount,setPayAmount]=React.useState("");
-  const [payNote,setPayNote]=React.useState("");
-  const selTrip=data.trips.find(t=>t.id===selTripId)||data.trips[0];
-  // dist: { [itemId]: { sel: [memberName,...], customMode: bool, customQtys: {member:qty}, confirmed: bool } }
-  const [dist,setDist]=React.useState({});
-  const [splitView,setSplitView]=React.useState("all");
-  const [focusItem,setFocusItem]=React.useState(0);
-  const [finalBill,setFinalBill]=React.useState(null); // computed after finalize
+  const [tab,setTab]=useState("trips");
+  const [newDate,setNewDate]=useState(todayStr());
+  const [selTripId,setSelTripId]=useState(null);
+  const [purchCat,setPurchCat]=useState("Vegetables");
+  const [purchItem,setPurchItem]=useState("");
+  const [purchQty,setPurchQty]=useState("");
+  const [purchPrice,setPurchPrice]=useState("");
+  const [travelExp,setTravelExp]=useState("");
+  const [payMember,setPayMember]=useState("");
+  const [payAmount,setPayAmount]=useState("");
+  const [payNote,setPayNote]=useState("");
+  const [dist,setDist]=useState({});
+  const [splitView,setSplitView]=useState("all");
+  const [focusItem,setFocusItem]=useState(0);
+  const [finalBill,setFinalBill]=useState(null);
 
-  // Init dist when trip changes
-  React.useEffect(()=>{
+  const selTrip=data.trips.find(t=>t.id===selTripId)||data.trips[0]||null;
+
+  useEffect(()=>{
     if(!selTrip) return;
     setDist(prev=>{
       const nd={};
       (selTrip.items||[]).forEach(item=>{
-        nd[item.id] = prev[item.id] || { sel:MEMBERS.slice(), customMode:false, customQtys:{}, confirmed:false };
+        nd[item.id]=prev[item.id]||{sel:MEMBERS.slice(),customMode:false,customQtys:{},confirmed:false};
       });
       return nd;
     });
     setFinalBill(null);
-  },[selTrip ? selTrip.id : null]);
+  },[selTrip?selTrip.id:null]);
 
-  function getDist(itemId){ if(!itemId) return {sel:MEMBERS.slice(),customMode:false,customQtys:{},confirmed:false}; return dist[itemId]||{sel:MEMBERS.slice(),customMode:false,customQtys:{},confirmed:false}; }
+  function getDist(id){ return dist[id]||{sel:MEMBERS.slice(),customMode:false,customQtys:{},confirmed:false}; }
 
-  function toggleSel(itemId, member){
+  function toggleSel(itemId,member){
     setDist(d=>{
       const cur=getDist(itemId);
-      let newSel=cur.sel.includes(member)?cur.sel.filter(m=>m!==member):[...cur.sel,member];
-      if(newSel.length===0) newSel=[member];
-      return{...d,[itemId]:{...cur,sel:newSel,customQtys:{},confirmed:false}};
+      let ns=cur.sel.includes(member)?cur.sel.filter(m=>m!==member):[...cur.sel,member];
+      if(ns.length===0) ns=[member];
+      return{...d,[itemId]:{...cur,sel:ns,customQtys:{},confirmed:false}};
     });
   }
   function selAll(itemId){
@@ -530,116 +506,109 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
   function toggleCustom(itemId){
     setDist(d=>{
       const cur=getDist(itemId);
-      const item=selTrip?.items.find(i=>i.id===itemId);
-      const each=item?parseFloat((item.qty/cur.sel.length).toFixed(2)):0;
+      const item=selTrip&&selTrip.items?selTrip.items.find(i=>i.id===itemId):null;
+      const each=item&&cur.sel.length>0?parseFloat((item.qty/cur.sel.length).toFixed(2)):0;
       const cq={};
       cur.sel.forEach(m=>cq[m]=each);
       return{...d,[itemId]:{...cur,customMode:!cur.customMode,customQtys:cur.customMode?{}:cq,confirmed:false}};
     });
   }
-  function setCustomQty(itemId,member,val){
-    setDist(d=>{
-      const cur=getDist(itemId);
-      return{...d,[itemId]:{...cur,customQtys:{...cur.customQtys,[member]:parseFloat(val)||0}}};
-    });
+  function setCustQty(itemId,member,val){
+    setDist(d=>({...d,[itemId]:{...getDist(itemId),customQtys:{...getDist(itemId).customQtys,[member]:parseFloat(val)||0}}}));
   }
   function confirmItem(itemId){
     setDist(d=>({...d,[itemId]:{...getDist(itemId),confirmed:true}}));
   }
 
-  function calcSmartSplit(trip, distData){
+  function calcSplit(trip,distData){
     if(!trip||!trip.orders||!trip.orders.length) return{};
     const d=distData||dist;
     const ordered=trip.orders.map(o=>o.member);
-    const numH=ordered.length||1;
-    const travShare=(trip.travelExpense||0)/numH;
+    const n=ordered.length||1;
+    const travShare=(trip.travelExpense||0)/n;
     const res={};
     ordered.forEach(m=>{ res[m]={amount:travShare,items:[]}; });
-    trip.items.forEach(item=>{
+    (trip.items||[]).forEach(item=>{
       const cur=d[item.id]||{sel:ordered,customMode:false,customQtys:{}};
-      const eligible=cur.sel.filter(m=>res[m]!==undefined);
-      if(!eligible.length) return;
-      const pricePerKg=item.qty>0?item.totalCost/item.qty:0;
-      if(cur.customMode && Object.keys(cur.customQtys).length>0){
-        eligible.forEach(m=>{
+      const elig=cur.sel.filter(m=>res[m]!==undefined);
+      if(!elig.length) return;
+      const rate=item.qty>0?item.totalCost/item.qty:0;
+      if(cur.customMode&&Object.keys(cur.customQtys).length>0){
+        elig.forEach(m=>{
           const q=parseFloat(cur.customQtys[m])||0;
-          res[m].items.push({name:item.name,qty:q,price:parseFloat((pricePerKg*q).toFixed(2))});
-          res[m].amount+=pricePerKg*q;
+          res[m].items.push({name:item.name,qty:q,price:parseFloat((rate*q).toFixed(2))});
+          res[m].amount+=rate*q;
         });
       } else {
-        const eachQty=parseFloat((item.qty/eligible.length).toFixed(2));
-        const eachCost=pricePerKg*eachQty;
-        eligible.forEach(m=>{
-          res[m].items.push({name:item.name,qty:eachQty,price:parseFloat(eachCost.toFixed(2))});
-          res[m].amount+=eachCost;
+        const eachQ=parseFloat((item.qty/elig.length).toFixed(2));
+        const eachC=parseFloat((rate*eachQ).toFixed(2));
+        elig.forEach(m=>{
+          res[m].items.push({name:item.name,qty:eachQ,price:eachC});
+          res[m].amount+=eachC;
         });
       }
     });
-    // round amounts
     Object.keys(res).forEach(m=>res[m].amount=parseFloat(res[m].amount.toFixed(2)));
     return res;
   }
 
   function finalizeSplit(){
-    if(!selTrip||!selTrip.items||!selTrip.orders||!selTrip.orders.length) {
-      showToast("Koi order nahi hai is trip mein!","#e63946");
-      return;
+    if(!selTrip||!selTrip.orders||!selTrip.orders.length){
+      showToast("Koi order nahi is trip mein!","#e63946"); return;
     }
-    const result=calcSmartSplit(selTrip,dist);
-    setFinalBill(result);
+    setFinalBill(calcSplit(selTrip,dist));
   }
 
-
-  function initials(name){return name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();}
-  function getMergedOrders(trip){
-    if(!trip||!trip.orders.length)return[];
+  function getMerged(trip){
+    if(!trip||!trip.orders||!trip.orders.length) return[];
     const totals={};
     trip.orders.forEach(order=>{
-      order.items.forEach(i=>{
-        const key=i.name+(i.custom?"__custom":"");
-        if(!totals[key])totals[key]={name:i.name,total:0,byMember:[],custom:!!i.custom};
+      (order.items||[]).forEach(i=>{
+        const key=i.name+(i.custom?"__c":"");
+        if(!totals[key]) totals[key]={name:i.name,total:0,byMember:[],custom:!!i.custom};
         totals[key].total+=Number(i.qty);
         totals[key].byMember.push({member:shortName(order.member),qty:i.qty});
       });
     });
     return Object.values(totals).sort((a,b)=>b.total-a.total);
   }
+
   function createTrip(){
-    if(!newDate)return showToast("Date ਚੁਣੋ!","#e63946");
+    if(!newDate) return showToast("Date chunno!","#e63946");
     const trip={id:uid(),date:newDate,status:"open",items:[],orders:[],travelExpense:0};
     setData(s=>({...s,trips:[trip,...s.trips]}));
-    setSelTripId(trip.id);showToast("🛒 Trip ਬਣ ਗਿਆ!");
+    setSelTripId(trip.id);
+    showToast("🛒 Trip ban gayi!");
   }
-  function closeTrip(id){setData(s=>({...s,trips:s.trips.map(t=>t.id===id?{...t,status:"closed"}:t)}));showToast("Trip closed.");}
+  function closeTrip(id){
+    setData(s=>({...s,trips:s.trips.map(t=>t.id===id?{...t,status:"closed"}:t)}));
+    showToast("Trip band ho gayi.");
+  }
   function addItem(){
-    if(!purchItem||!purchQty||!purchPrice)return showToast("ਸਾਰੇ ਖੇਤਰ ਭਰੋ!","#e63946");
+    if(!purchItem||!purchQty||!purchPrice) return showToast("Sare fields bharo!","#e63946");
     const item={id:uid(),name:purchItem,qty:Number(purchQty),totalCost:Number(purchPrice)};
-    setData(s=>({...s,trips:s.trips.map(t=>t.id===selTrip?.id?{...t,items:[...t.items,item]}:t)}));
-    setPurchItem("");setPurchQty("");setPurchPrice("");showToast("✅ Item added!");
+    setData(s=>({...s,trips:s.trips.map(t=>t.id===(selTrip&&selTrip.id)?{...t,items:[...t.items,item]}:t)}));
+    setPurchItem(""); setPurchQty(""); setPurchPrice("");
+    showToast("✅ Item add ho gaya!");
   }
-  function removeItem(itemId){setData(s=>({...s,trips:s.trips.map(t=>t.id===selTrip?.id?{...t,items:t.items.filter(i=>i.id!==itemId)}:t)}));}
-  function saveTravelExp(){setData(s=>({...s,trips:s.trips.map(t=>t.id===selTrip?.id?{...t,travelExpense:Number(travelExp)}:t)}));showToast("Saved!");}
-
-  function settleBills(){
-    if(!selTrip)return;
-    const split=calcSplit(selTrip);
-    if(!Object.keys(split).length)return showToast("No orders!","#e63946");
-    setData(s=>{
-      const nl={...s.ledger};
-      Object.entries(split).forEach(([m,d])=>{nl[m]={...nl[m],bills:[...nl[m].bills,{tripId:selTrip.id,date:selTrip.date,amount:d.amount,items:d.items}]};});
-      return{...s,ledger:nl,trips:s.trips.map(t=>t.id===selTrip.id?{...t,status:"settled"}:t)};
-    });
-    showToast("✅ Bills sent!");
+  function removeItem(itemId){
+    setData(s=>({...s,trips:s.trips.map(t=>t.id===(selTrip&&selTrip.id)?{...t,items:t.items.filter(i=>i.id!==itemId)}:t)}));
+  }
+  function saveTravelExp(){
+    setData(s=>({...s,trips:s.trips.map(t=>t.id===(selTrip&&selTrip.id)?{...t,travelExpense:Number(travelExp)}:t)}));
+    showToast("Travel expense save ho gaya!");
   }
   function recordPayment(){
-    if(!payMember||!payAmount)return showToast("ਭਰੋ!","#e63946");
+    if(!payMember||!payAmount) return showToast("Member aur amount bharo!","#e63946");
     const pay={id:uid(),date:todayStr(),amount:Number(payAmount),note:payNote||"Payment received"};
     setData(s=>({...s,ledger:{...s.ledger,[payMember]:{...s.ledger[payMember],payments:[...s.ledger[payMember].payments,pay]}}}));
-    setPayAmount("");setPayNote("");showToast(`✅ ${fmt(Number(payAmount))} recorded`);
+    setPayAmount(""); setPayNote("");
+    showToast("✅ "+fmt(Number(payAmount))+" record ho gaya");
   }
+
   const totalItemCost=selTrip&&selTrip.items?selTrip.items.reduce((s,i)=>s+i.totalCost,0):0;
   const totalCost=totalItemCost+(selTrip?selTrip.travelExpense||0:0);
-  const mergedOrders=getMergedOrders(selTrip);
+  const mergedOrders=getMerged(selTrip);
 
   return(
     <div style={S.screen}>
@@ -651,16 +620,17 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
       </div>
       <div style={{padding:"0 14px 60px"}}>
 
+        {/* ── TRIPS ── */}
         {tab==="trips"&&(
           <>
-            <p style={S.label}>New Trip</p>
+            <p style={S.label}>Nayi Trip</p>
             <div style={{display:"flex",gap:8}}>
               <input type="date" style={{...S.input,flex:1}} value={newDate} onChange={e=>setNewDate(e.target.value)}/>
               <button style={{...S.btn,...S.btnGreen}} onClick={createTrip}>+ Trip</button>
             </div>
-            {data.trips.length===0&&<div style={S.emptyBox}><p style={S.emptyText}>No trips yet.</p></div>}
+            {data.trips.length===0&&<div style={S.emptyBox}><p style={S.emptyText}>Koi trip nahi abhi tak.</p></div>}
             {data.trips.map(trip=>(
-              <div key={trip.id} style={{...S.tripCard,border:`2px solid ${selTrip?.id===trip.id?"#2d6a4f":"transparent"}`}} onClick={()=>setSelTripId(trip.id)}>
+              <div key={trip.id} style={{...S.tripCard,border:`2px solid ${selTrip&&selTrip.id===trip.id?"#2d6a4f":"transparent"}`}} onClick={()=>setSelTripId(trip.id)}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div><b>📅 {trip.date}</b><div style={{fontSize:12,color:"#888",marginTop:2}}>{trip.orders.length} orders · {trip.items.length} items</div></div>
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
@@ -674,19 +644,20 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
           </>
         )}
 
+        {/* ── SUMMARY ── */}
         {tab==="summary"&&(
           <>
-            {!selTrip?<div style={S.emptyBox}><p style={S.emptyText}>Trips tab ਤੋਂ trip ਚੁਣੋ।</p></div>:(
+            {!selTrip?<div style={S.emptyBox}><p style={S.emptyText}>Trips tab se trip chunno.</p></div>:(
               <>
                 <div style={S.tripBanner}><span>📅 <b>{selTrip.date}</b></span><span style={{...S.badge,background:"#2d6a4f"}}>{selTrip.status}</span></div>
                 <div style={{...S.summaryCard,background:"linear-gradient(135deg,#1a4731,#2d6a4f)",color:"#fff"}}>
-                  <div style={{fontSize:13,opacity:0.8,marginBottom:4}}>Orders Received</div>
+                  <div style={{fontSize:13,opacity:0.8,marginBottom:4}}>Orders Mile</div>
                   <div style={{fontSize:28,fontWeight:900}}>{selTrip.orders.length} <span style={{fontSize:14,fontWeight:400}}>members</span></div>
-                  <div style={{fontSize:13,opacity:0.8,marginTop:4}}>{mergedOrders.length} unique items ordered</div>
+                  <div style={{fontSize:13,opacity:0.8,marginTop:4}}>{mergedOrders.filter(i=>!i.custom).length} items ordered</div>
                 </div>
-                {mergedOrders.length===0?<div style={S.emptyBox}><p style={S.emptyText}>No orders yet.</p></div>:(
+                {mergedOrders.length===0?<div style={S.emptyBox}><p style={S.emptyText}>Koi order nahi abhi tak.</p></div>:(
                   <>
-                    <p style={S.label}>🛒 Regular Items - Kya Lana Hai</p>
+                    <p style={S.label}>🛒 Mandi se lana hai yeh:</p>
                     {mergedOrders.filter(i=>!i.custom).map(item=>(
                       <div key={item.name} style={S.mergeRow}>
                         <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
@@ -703,11 +674,11 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                     ))}
                     {mergedOrders.some(i=>i.custom)&&(
                       <>
-                        <p style={{...S.label,marginTop:20,color:"#b7770d"}}>✏️ Custom Items (Special Requests)</p>
+                        <p style={{...S.label,color:"#b7770d"}}>✏️ Custom Items (Special):</p>
                         {mergedOrders.filter(i=>i.custom).map(item=>(
                           <div key={item.name} style={{...S.mergeRow,background:"#fff9e6",border:"1.5px solid #f4d03f"}}>
                             <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
-                              <span style={{fontSize:26,minWidth:32,textAlign:"center"}}>✏️</span>
+                              <span style={{fontSize:26}}>✏️</span>
                               <div style={{flex:1}}>
                                 <div style={{fontWeight:800,fontSize:14,color:"#b7770d"}}>{item.name}</div>
                                 <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
@@ -715,7 +686,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                                 </div>
                               </div>
                             </div>
-                            <div style={{...S.totalQtyBadge,background:"linear-gradient(135deg,#b7770d,#d4a017)"}}>{item.total}<span style={{fontSize:10,fontWeight:600}}> kg</span></div>
+                            <div style={{...S.totalQtyBadge,background:"linear-gradient(135deg,#b7770d,#d4a017)"}}>{item.total}</div>
                           </div>
                         ))}
                       </>
@@ -727,9 +698,10 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
           </>
         )}
 
+        {/* ── PURCHASE ── */}
         {tab==="purchase"&&(
           <>
-            {!selTrip?<div style={S.emptyBox}><p style={S.emptyText}>Trips tab ਤੋਂ trip ਚੁਣੋ।</p></div>:(
+            {!selTrip?<div style={S.emptyBox}><p style={S.emptyText}>Trips tab se trip chunno.</p></div>:(
               <>
                 <div style={S.tripBanner}><span>📅 <b>{selTrip.date}</b></span><span style={{...S.badge,background:selTrip.status==="open"?"#2d6a4f":"#888"}}>{selTrip.status}</span></div>
                 <p style={S.label}>Category</p>
@@ -741,22 +713,22 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   ))}
                 </div>
                 <select style={S.select} value={purchItem} onChange={e=>setPurchItem(e.target.value)}>
-                  <option value="">— Item ਚੁਣੋ —</option>
+                  <option value="">— Item chunno —</option>
                   {CATEGORIES[purchCat].map(i=><option key={i.name} value={i.name}>{i.emoji} {i.name}</option>)}
                 </select>
                 <div style={{display:"flex",gap:8,marginTop:8}}>
                   <input style={{...S.input,flex:1}} placeholder="Qty kg/pcs" type="number" value={purchQty} onChange={e=>setPurchQty(e.target.value)}/>
-                  <input style={{...S.input,flex:1}} placeholder="Total ₹ paid" type="number" value={purchPrice} onChange={e=>setPurchPrice(e.target.value)}/>
+                  <input style={{...S.input,flex:1}} placeholder="Total ₹ diya" type="number" value={purchPrice} onChange={e=>setPurchPrice(e.target.value)}/>
                 </div>
-                <button style={{...S.btn,...S.btnGreen,marginTop:8,width:"100%"}} onClick={addItem}>+ Add Item</button>
+                <button style={{...S.btn,...S.btnGreen,marginTop:8,width:"100%"}} onClick={addItem}>+ Item Add Karo</button>
                 {selTrip.items.length>0&&(
                   <>
-                    <p style={{...S.label,marginTop:18}}>Purchased</p>
+                    <p style={{...S.label,marginTop:18}}>Kharida Hua Samaan</p>
                     {selTrip.items.map(item=>(
                       <div key={item.id} style={S.purchaseRow}>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
                           <span style={{fontSize:22}}>{EMOJI_MAP[item.name]||"🛒"}</span>
-                          <div><b style={{fontSize:13}}>{item.name}</b><div style={{fontSize:11,color:"#888"}}>{item.qty} kg/pcs</div></div>
+                          <div><b style={{fontSize:13}}>{item.name}</b><div style={{fontSize:11,color:"#888"}}>{item.qty} kg · ₹{item.qty>0?(item.totalCost/item.qty).toFixed(0):0}/kg</div></div>
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
                           <b style={{color:"#2d6a4f"}}>{fmt(item.totalCost)}</b>
@@ -772,19 +744,18 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   <input style={{...S.input,flex:1}} placeholder="₹ petrol / auto" type="number" value={travelExp} onChange={e=>setTravelExp(e.target.value)}/>
                   <button style={{...S.btn,...S.btnDark}} onClick={saveTravelExp}>Save</button>
                 </div>
-                {selTrip.travelExpense>0&&<p style={{fontSize:13,color:"#2d6a4f",marginTop:6}}>Travel: {fmt(selTrip.travelExpense)} · splits equally</p>}
+                {selTrip.travelExpense>0&&<p style={{fontSize:13,color:"#2d6a4f",marginTop:6}}>Travel: {fmt(selTrip.travelExpense)} · barabar banta hai</p>}
               </>
             )}
           </>
         )}
 
+        {/* ── SPLIT ── */}
         {tab==="split"&&(
           <>
-            {!selTrip?<div style={S.emptyBox}><p style={S.emptyText}>Trips tab ਤੋਂ trip ਚੁਣੋ।</p></div>:(
+            {!selTrip?<div style={S.emptyBox}><p style={S.emptyText}>Trips tab se trip chunno.</p></div>:(
               <>
                 <div style={S.tripBanner}><span>📅 <b>{selTrip.date}</b></span><span style={{...S.badge,background:selTrip.status==="settled"?"#457b9d":"#2d6a4f"}}>{selTrip.status}</span></div>
-
-                {/* Cost summary bar */}
                 <div style={S.summaryCard}>
                   <div style={S.summaryRow}><span>Items Cost</span><b>{fmt(totalItemCost)}</b></div>
                   <div style={S.summaryRow}><span>Travel</span><b>{fmt(selTrip.travelExpense)}</b></div>
@@ -793,160 +764,104 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   </div>
                 </div>
 
-                {selTrip.items.length===0
-                  ?<div style={S.emptyBox}><p style={S.emptyText}>Pehle Buy tab mein items add karo.</p></div>
-                  :(
+                {selTrip.items.length===0?<div style={S.emptyBox}><p style={S.emptyText}>Pehle Buy tab mein items add karo.</p></div>:(
                   <>
-                    {/* View toggle */}
                     <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
                       <span style={{fontSize:13,fontWeight:800,color:"#555",flex:1}}>📦 Items baanto:</span>
-                      <button onClick={()=>{setSplitView("all");}} style={{...S.pill,background:splitView==="all"?"#2d6a4f":"#e8f5e9",color:splitView==="all"?"#fff":"#2d6a4f",fontWeight:800}}>Sab Ek Saath</button>
+                      <button onClick={()=>setSplitView("all")} style={{...S.pill,background:splitView==="all"?"#2d6a4f":"#e8f5e9",color:splitView==="all"?"#fff":"#2d6a4f",fontWeight:800}}>Sab Ek Saath</button>
                       <button onClick={()=>{setSplitView("one");setFocusItem(0);}} style={{...S.pill,background:splitView==="one"?"#2d6a4f":"#e8f5e9",color:splitView==="one"?"#fff":"#2d6a4f",fontWeight:800}}>Ek Ek Karke</button>
                     </div>
 
-                    {/* One-by-one nav */}
                     {splitView==="one"&&(
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,background:"#fff",borderRadius:12,padding:"10px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
                         <button onClick={()=>setFocusItem(i=>Math.max(0,i-1))} style={{...S.btn,...S.btnGhost,padding:"8px 16px",opacity:focusItem===0?0.3:1}}>← Pehle</button>
                         <div style={{textAlign:"center"}}>
-                          <div style={{fontWeight:800,fontSize:14}}>{selTrip.items[focusItem]?.name}</div>
+                          <div style={{fontWeight:800,fontSize:14}}>{selTrip.items[focusItem]&&selTrip.items[focusItem].name}</div>
                           <div style={{fontSize:12,color:"#aaa"}}>{focusItem+1} / {selTrip.items.length}</div>
                         </div>
                         <button onClick={()=>setFocusItem(i=>Math.min(selTrip.items.length-1,i+1))} style={{...S.btn,...S.btnGhost,padding:"8px 16px",opacity:focusItem===selTrip.items.length-1?0.3:1}}>Agla →</button>
                       </div>
                     )}
 
-                    {/* Item cards */}
                     {(splitView==="one"?[selTrip.items[focusItem]]:selTrip.items).filter(Boolean).map(item=>{
                       const d=getDist(item.id);
-                      const pricePerKg=item.qty>0?(item.totalCost/item.qty):0;
-                      const eachQty=d.sel.length>0?parseFloat((item.qty/d.sel.length).toFixed(2)):0;
-                      const eachCost=parseFloat((pricePerKg*eachQty).toFixed(2));
-                      const customTotal=Object.values(d.customQtys).reduce((s,v)=>s+(parseFloat(v)||0),0);
-                      const customOk=Math.abs(customTotal-item.qty)<0.05;
+                      const rate=item.qty>0?item.totalCost/item.qty:0;
+                      const eachQ=d.sel.length>0?parseFloat((item.qty/d.sel.length).toFixed(2)):0;
+                      const eachC=parseFloat((rate*eachQ).toFixed(2));
+                      const custTotal=Object.values(d.customQtys).reduce((s,v)=>s+(parseFloat(v)||0),0);
+                      const custOk=Math.abs(custTotal-item.qty)<0.05;
                       return(
-                        <div key={item.id} style={{
-                          background:"#fff",borderRadius:18,padding:16,marginBottom:14,
-                          boxShadow:"0 2px 16px rgba(0,0,0,0.08)",
-                          border:`2px solid ${d.confirmed?"#2d6a4f":"#e8f5e9"}`,
-                        }}>
-                          {/* Item header */}
+                        <div key={item.id} style={{background:"#fff",borderRadius:18,padding:16,marginBottom:14,boxShadow:"0 2px 16px rgba(0,0,0,0.08)",border:`2px solid ${d.confirmed?"#2d6a4f":"#e8f5e9"}`}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                             <div style={{display:"flex",alignItems:"center",gap:10}}>
                               <span style={{fontSize:30}}>{EMOJI_MAP[item.name]||"🛒"}</span>
                               <div>
                                 <b style={{fontSize:16}}>{item.name}</b>
-                                <div style={{fontSize:12,color:"#888",marginTop:1}}>{item.qty} kg · {fmt(item.totalCost)} · ₹{pricePerKg.toFixed(0)}/kg</div>
+                                <div style={{fontSize:12,color:"#888",marginTop:1}}>{item.qty} kg · {fmt(item.totalCost)} · ₹{rate.toFixed(0)}/kg</div>
                               </div>
                             </div>
                             {d.confirmed&&<span style={{...S.badge,background:"#2d6a4f",fontSize:12}}>✓ Done</span>}
                           </div>
 
-                          {/* ── MEMBER SELECTOR ── */}
                           <div style={{marginBottom:12}}>
                             <div style={{fontSize:12,fontWeight:800,color:"#666",marginBottom:8}}>Kisne liya? Tap karke choose karo:</div>
                             <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-
-                              {/* ALL button */}
-                              <button
-                                onClick={()=>selAll(item.id)}
-                                style={{
-                                  padding:"8px 14px",borderRadius:20,border:"2px solid",cursor:"pointer",
-                                  fontFamily:"inherit",fontWeight:900,fontSize:12,
-                                  background:d.sel.length===MEMBERS.length?"#1a4731":"#fff",
-                                  color:d.sel.length===MEMBERS.length?"#fff":"#2d6a4f",
-                                  borderColor:d.sel.length===MEMBERS.length?"#1a4731":"#2d6a4f",
-                                }}>
+                              <button onClick={()=>selAll(item.id)} style={{padding:"8px 14px",borderRadius:20,cursor:"pointer",fontFamily:"inherit",fontWeight:900,fontSize:12,border:`2px solid ${d.sel.length===MEMBERS.length?"#1a4731":"#2d6a4f"}`,background:d.sel.length===MEMBERS.length?"#1a4731":"#fff",color:d.sel.length===MEMBERS.length?"#fff":"#2d6a4f"}}>
                                 Sabhi ✓
                               </button>
-
-                              {/* Individual initials */}
                               {MEMBERS.map(m=>{
                                 const selected=d.sel.includes(m);
                                 return(
-                                  <button
-                                    key={m}
-                                    onClick={()=>toggleSel(item.id,m)}
-                                    title={m}
-                                    style={{
-                                      width:46,height:46,borderRadius:"50%",
-                                      border:`3px solid ${selected?"#2d6a4f":"#ddd"}`,
-                                      cursor:"pointer",fontFamily:"inherit",fontWeight:900,fontSize:13,
-                                      background:selected?"#2d6a4f":"#f5f5f5",
-                                      color:selected?"#fff":"#888",
-                                      boxShadow:selected?"0 3px 10px rgba(45,106,79,0.4)":"none",
-                                      transition:"all 0.15s",
-                                    }}>
+                                  <button key={m} onClick={()=>toggleSel(item.id,m)} title={m} style={{width:46,height:46,borderRadius:"50%",border:`3px solid ${selected?"#2d6a4f":"#ddd"}`,cursor:"pointer",fontFamily:"inherit",fontWeight:900,fontSize:13,background:selected?"#2d6a4f":"#f5f5f5",color:selected?"#fff":"#888",boxShadow:selected?"0 3px 10px rgba(45,106,79,0.4)":"none",transition:"all 0.15s"}}>
                                     {initials(m)}
                                   </button>
                                 );
                               })}
                             </div>
-                            {/* Selected names shown below */}
-                            <div style={{fontSize:11,color:"#2d6a4f",fontWeight:700,marginTop:6}}>
-                              ✓ {d.sel.map(m=>shortName(m)).join(", ")}
-                            </div>
+                            <div style={{fontSize:11,color:"#2d6a4f",fontWeight:700,marginTop:6}}>✓ {d.sel.map(m=>shortName(m)).join(", ")}</div>
                           </div>
 
-                          {/* ── QUANTITY SPLIT PREVIEW ── */}
                           {!d.customMode&&(
                             <div style={{background:"#f0faf4",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
-                              <div style={{fontSize:12,color:"#555",fontWeight:700,marginBottom:4}}>Equal split ({d.sel.length} log):</div>
+                              <div style={{fontSize:12,color:"#555",fontWeight:700,marginBottom:4}}>Barabar split ({d.sel.length} log):</div>
                               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                                 {d.sel.map(m=>(
                                   <span key={m} style={{background:"#fff",border:"1px solid #b7e4c7",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:700,color:"#1a4731"}}>
-                                    {shortName(m)}: {eachQty}kg = {fmt(eachCost)}
+                                    {shortName(m)}: {eachQ}kg = {fmt(eachC)}
                                   </span>
                                 ))}
                               </div>
                             </div>
                           )}
 
-                          {/* ── CUSTOM QTY MODE ── */}
                           {d.customMode&&(
                             <div style={{background:"#fffbf0",border:"1.5px solid #f4d03f",borderRadius:12,padding:12,marginBottom:10}}>
                               <div style={{fontSize:12,fontWeight:800,color:"#b7770d",marginBottom:8}}>
-                                Custom quantity — Total chahiye: {item.qty} kg
-                                <span style={{marginLeft:8,color:customOk?"#2d6a4f":"#e63946"}}>
-                                  {customOk?"✅ Sahi hai":"⚠️ "+customTotal.toFixed(2)+" kg"}
-                                </span>
+                                Custom qty — Total: {item.qty} kg
+                                <span style={{marginLeft:8,color:custOk?"#2d6a4f":"#e63946"}}>{custOk?"✅ Sahi":"⚠️ "+custTotal.toFixed(2)+"kg"}</span>
                               </div>
                               {d.sel.map(m=>(
                                 <div key={m} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                                  <div style={{width:36,height:36,borderRadius:"50%",background:"#2d6a4f",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>
-                                    {initials(m)}
-                                  </div>
+                                  <div style={{width:36,height:36,borderRadius:"50%",background:"#2d6a4f",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>{initials(m)}</div>
                                   <span style={{fontSize:13,fontWeight:700,flex:1}}>{shortName(m)}</span>
-                                  <button style={{...S.qtyBtn}} onClick={()=>setCustomQty(item.id,m,Math.max(0,((parseFloat(d.customQtys[m])||0)-0.5)))}>−</button>
+                                  <button style={S.qtyBtn} onClick={()=>setCustQty(item.id,m,Math.max(0,(parseFloat(d.customQtys[m])||0)-0.5))}>−</button>
                                   <input type="number" min="0" step="0.5"
                                     style={{width:58,textAlign:"center",fontWeight:800,fontSize:14,border:"1.5px solid #f4d03f",borderRadius:8,padding:"5px 2px",background:"#fff",fontFamily:"inherit"}}
-                                    value={d.customQtys[m]!==undefined?d.customQtys[m]:""}
-                                    placeholder="0"
-                                    onChange={e=>setCustomQty(item.id,m,e.target.value)}
+                                    value={d.customQtys[m]!==undefined?d.customQtys[m]:""} placeholder="0"
+                                    onChange={e=>setCustQty(item.id,m,e.target.value)}
                                   />
-                                  <button style={{...S.qtyBtn}} onClick={()=>setCustomQty(item.id,m,((parseFloat(d.customQtys[m])||0)+0.5))}>+</button>
-                                  <span style={{fontSize:11,color:"#888",minWidth:48,textAlign:"right"}}>{fmt(pricePerKg*(parseFloat(d.customQtys[m])||0))}</span>
+                                  <button style={S.qtyBtn} onClick={()=>setCustQty(item.id,m,(parseFloat(d.customQtys[m])||0)+0.5)}>+</button>
+                                  <span style={{fontSize:11,color:"#888",minWidth:48,textAlign:"right"}}>{fmt(rate*(parseFloat(d.customQtys[m])||0))}</span>
                                 </div>
                               ))}
                             </div>
                           )}
 
-                          {/* ── ITEM ACTION BUTTONS ── */}
                           <div style={{display:"flex",gap:8,marginTop:4}}>
-                            <button onClick={()=>toggleCustom(item.id)} style={{
-                              ...S.btn,flex:1,padding:"9px 10px",fontSize:12,
-                              background:d.customMode?"#fff9e6":"#f0f0f0",
-                              color:d.customMode?"#b7770d":"#555",
-                              border:`1.5px solid ${d.customMode?"#f4d03f":"#ddd"}`,
-                            }}>
+                            <button onClick={()=>toggleCustom(item.id)} style={{...S.btn,flex:1,padding:"9px 10px",fontSize:12,background:d.customMode?"#fff9e6":"#f0f0f0",color:d.customMode?"#b7770d":"#555",border:`1.5px solid ${d.customMode?"#f4d03f":"#ddd"}`}}>
                               {d.customMode?"✏️ Custom ON":"✏️ Custom Qty"}
                             </button>
-                            <button onClick={()=>confirmItem(item.id)} style={{
-                              ...S.btn,flex:1,padding:"9px 10px",fontSize:12,
-                              background:d.confirmed?"#e8f5e9":"#2d6a4f",
-                              color:d.confirmed?"#2d6a4f":"#fff",
-                              border:`1.5px solid ${d.confirmed?"#2d6a4f":"transparent"}`,
-                            }}>
+                            <button onClick={()=>confirmItem(item.id)} style={{...S.btn,flex:1,padding:"9px 10px",fontSize:12,background:d.confirmed?"#e8f5e9":"#2d6a4f",color:d.confirmed?"#2d6a4f":"#fff",border:`1.5px solid ${d.confirmed?"#2d6a4f":"transparent"}`}}>
                               {d.confirmed?"✅ Confirmed!":"✔ Confirm Item"}
                             </button>
                           </div>
@@ -954,44 +869,34 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                       );
                     })}
 
-                    {/* ── FINALIZE SECTION ── */}
                     {selTrip.status!=="settled"&&(
                       <div style={{background:"#fff",borderRadius:18,padding:16,marginTop:4,boxShadow:"0 2px 16px rgba(0,0,0,0.08)",border:"2px solid #e8f5e9"}}>
-                        {/* Progress */}
                         <div style={{marginBottom:12}}>
                           <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,color:"#555",marginBottom:6}}>
                             <span>Items confirmed</span>
-                            <span style={{color:"#2d6a4f"}}>{selTrip.items.filter(i=>dist[i.id]?.confirmed).length} / {selTrip.items.length}</span>
+                            <span style={{color:"#2d6a4f"}}>{selTrip.items.filter(i=>dist[i.id]&&dist[i.id].confirmed).length} / {selTrip.items.length}</span>
                           </div>
                           <div style={{background:"#e8f5e9",borderRadius:20,height:8}}>
-                            <div style={{background:"#2d6a4f",borderRadius:20,height:8,width:`${selTrip.items.length>0?(selTrip.items.filter(i=>dist[i.id]?.confirmed).length/selTrip.items.length)*100:0}%`,transition:"width 0.4s"}}/>
+                            <div style={{background:"#2d6a4f",borderRadius:20,height:8,width:`${selTrip.items.length>0?(selTrip.items.filter(i=>dist[i.id]&&dist[i.id].confirmed).length/selTrip.items.length)*100:0}%`,transition:"width 0.4s"}}/>
                           </div>
                         </div>
 
-                        {/* Calculate bill preview button */}
                         <button onClick={finalizeSplit} style={{...S.btn,width:"100%",background:"#1a4731",color:"#fff",fontSize:14,marginBottom:10}}>
-                          🧮 Calculate & Preview Bills
+                          🧮 Bill Calculate Karo & Dekho
                         </button>
 
-                        {/* Bill preview after finalize */}
                         {finalBill&&(
                           <>
-                            <div style={{fontSize:13,fontWeight:800,color:"#555",marginBottom:10}}>💰 Final Bill Preview:</div>
+                            <div style={{fontSize:13,fontWeight:800,color:"#555",marginBottom:10}}>💰 Final Bill:</div>
                             {Object.entries(finalBill).map(([member,bd])=>(
                               <div key={member} style={{...S.billCard,marginBottom:8}}>
                                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                                    <div style={{width:38,height:38,borderRadius:"50%",background:"#2d6a4f",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13}}>
-                                      {initials(member)}
-                                    </div>
-                                    <div>
-                                      <b style={{fontSize:14}}>{member}</b>
-                                      <div style={{fontSize:11,color:"#888"}}>{bd.items.length} items</div>
-                                    </div>
+                                    <div style={{width:38,height:38,borderRadius:"50%",background:"#2d6a4f",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13}}>{initials(member)}</div>
+                                    <div><b style={{fontSize:14}}>{member}</b><div style={{fontSize:11,color:"#888"}}>{bd.items.length} items</div></div>
                                   </div>
                                   <span style={S.amountBadge}>{fmt(bd.amount)}</span>
                                 </div>
-                                {/* Item breakdown */}
                                 <div style={{background:"#f8fdf8",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
                                   {bd.items.map(i=>(
                                     <div key={i.name} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
@@ -999,41 +904,32 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                                       <span style={{fontWeight:700,color:"#2d6a4f"}}>{fmt(i.price)}</span>
                                     </div>
                                   ))}
-                                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3,color:"#888"}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#888",marginTop:4,paddingTop:4,borderTop:"1px solid #eee"}}>
                                     <span>🚗 Travel share</span>
                                     <span>{fmt((selTrip.travelExpense||0)/Object.keys(finalBill).length)}</span>
                                   </div>
                                 </div>
-                                {/* WhatsApp button per person */}
-                                <button
-                                  onClick={()=>sendWhatsApp(member,bd,selTrip.date,(selTrip.travelExpense||0)/Object.keys(finalBill).length,selTrip.items)}
+                                <button onClick={()=>sendWA(member,bd,selTrip.date,(selTrip.travelExpense||0)/Object.keys(finalBill).length,selTrip.items)}
                                   style={{width:"100%",padding:"9px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                                   📲 WhatsApp {shortName(member)}
                                 </button>
                               </div>
                             ))}
-
-                            {/* Send all WA */}
-                            <button
-                              onClick={()=>sendAllWhatsApp(finalBill,selTrip.date,selTrip.travelExpense||0,selTrip.items)}
+                            <button onClick={()=>sendAllWA(finalBill,selTrip.date,selTrip.travelExpense||0,selTrip.items)}
                               style={{...S.btn,width:"100%",marginBottom:10,fontSize:14,background:"#128C7E",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                               📲 Sabko WhatsApp Bhejo
                             </button>
-
-                            {/* Final settle button */}
-                            <button
-                              onClick={()=>{
-                                if(!finalBill||!Object.keys(finalBill).length)return showToast("Pehle calculate karo!","#e63946");
-                                setData(s=>{
-                                  const nl={...s.ledger};
-                                  Object.entries(finalBill).forEach(([m,d])=>{
-                                    nl[m]={...nl[m],bills:[...nl[m].bills,{tripId:selTrip.id,date:selTrip.date,amount:d.amount,items:d.items}]};
-                                  });
-                                  return{...s,ledger:nl,trips:s.trips.map(t=>t.id===selTrip.id?{...t,status:"settled"}:t)};
+                            <button onClick={()=>{
+                              if(!finalBill||!Object.keys(finalBill).length) return showToast("Pehle calculate karo!","#e63946");
+                              setData(s=>{
+                                const nl={...s.ledger};
+                                Object.entries(finalBill).forEach(([m,d])=>{
+                                  nl[m]={...nl[m],bills:[...nl[m].bills,{tripId:selTrip.id,date:selTrip.date,amount:d.amount,items:d.items}]};
                                 });
-                                showToast("✅ Bills sabko bhej diye!");
-                              }}
-                              style={{...S.btn,...S.btnGreen,width:"100%",fontSize:15}}>
+                                return{...s,ledger:nl,trips:s.trips.map(t=>t.id===selTrip.id?{...t,status:"settled"}:t)};
+                              });
+                              showToast("✅ Bills sab ko bhej diye!");
+                            }} style={{...S.btn,...S.btnGreen,width:"100%",fontSize:15}}>
                               ✅ Final Karo & Sabko Bill Bhejo
                             </button>
                           </>
@@ -1046,41 +942,44 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
               </>
             )}
           </>
-        }
+        )}
 
-        {
-        tab==="payments"&&(
+        {/* ── PAYMENTS ── */}
+        {tab==="payments"&&(
           <>
-            <p style={S.label}>Record Payment Received</p>
+            <p style={S.label}>Payment Record Karo</p>
             <select style={S.select} value={payMember} onChange={e=>setPayMember(e.target.value)}>
               <option value="">— Member chunno —</option>
-              {MEMBERS.map(m=><option key={m} value={m}>{m} · owes {fmt(getBalance(m))}</option>)}
+              {MEMBERS.map(m=><option key={m} value={m}>{m} · dena hai {fmt(getBalance(m))}</option>)}
             </select>
             <div style={{display:"flex",gap:8,marginTop:8}}>
               <input style={{...S.input,flex:1}} placeholder="Amount ₹" type="number" value={payAmount} onChange={e=>setPayAmount(e.target.value)}/>
-              <input style={{...S.input,flex:1}} placeholder="Note (opt)" value={payNote} onChange={e=>setPayNote(e.target.value)}/>
+              <input style={{...S.input,flex:1}} placeholder="Note (optional)" value={payNote} onChange={e=>setPayNote(e.target.value)}/>
             </div>
-            <button style={{...S.btn,...S.btnGreen,marginTop:10,width:"100%"}} onClick={recordPayment}>
-              💵 Payment Record Karo
-            </button>
+            <button style={{...S.btn,...S.btnGreen,marginTop:10,width:"100%"}} onClick={recordPayment}>💵 Payment Record Karo</button>
 
             <p style={{...S.label,marginTop:24}}>Sabka Balance</p>
             {MEMBERS.map(m=>{
-              const bal=getBalance(m),l=data.ledger[m];
+              const bal=getBalance(m);
+              const l=data.ledger&&data.ledger[m]?data.ledger[m]:{bills:[],payments:[]};
               return(
                 <div key={m} style={S.memberBalCard}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
                       <b style={{fontSize:14}}>👤 {m}</b>
-                      <div style={{fontSize:11,color:"#888",marginTop:2}}>Billed: {fmt(l.bills.reduce((s,b)=>s+b.amount,0))} · Paid: {fmt(l.payments.reduce((s,p)=>s+p.amount,0))}</div>
+                      <div style={{fontSize:11,color:"#888",marginTop:2}}>
+                        Bill: {fmt(l.bills.reduce((s,b)=>s+b.amount,0))} · Paid: {fmt(l.payments.reduce((s,p)=>s+p.amount,0))}
+                      </div>
                     </div>
-                    <span style={{...S.amountBadge,fontSize:13,background:bal>0?"#e63946":bal<0?"#2d6a4f":"#888"}}>{bal>0?`Owes ${fmt(bal)}`:bal<0?`Cr ${fmt(-bal)}`:"✓ Clear"}</span>
+                    <span style={{...S.amountBadge,fontSize:13,background:bal>0?"#e63946":bal<0?"#2d6a4f":"#888"}}>
+                      {bal>0?`Owes ${fmt(bal)}`:bal<0?`Cr ${fmt(-bal)}`:"✓ Clear"}
+                    </span>
                   </div>
                   {bal>0&&(
                     <button onClick={()=>{
                       const phone=getPhone(m);
-                      if(!phone||phone.includes("X")){alert("Phone number update karo!");return;}
-                      const msg=`Sat Sri Akal ${shortName(m)} Ji 🙏\n\nAapka Sabji Mandi balance hai: *₹${bal.toFixed(2)}*\nKripaya payment kar do. Shukriya!`;
+                      if(!phone){ alert("Phone number nahi mila!"); return; }
+                      const msg=`Sat Sri Akal ${shortName(m)} Ji 🙏\n\nAapka Sabji Mandi balance hai: *₹${bal.toFixed(2)}*\nKripaya payment kar do. Shukriya! 🙏`;
                       window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
                     }} style={{marginTop:8,width:"100%",padding:"8px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
                       📲 Payment Remind — {shortName(m)}
@@ -1097,38 +996,26 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
   );
 }
 
+// ── APP ROOT ─────────────────────────────────────────────────
 function App(){
-  const [data,setDataRaw]=React.useState(null);
-  const [view,setView]=React.useState("home");
-  const [selMember,setSelMember]=React.useState("");
-  const [pinInput,setPinInput]=React.useState("");
-  const [pinError,setPinError]=React.useState(false);
-  const [toast,setToast]=React.useState(null);
-  const [saving,setSaving]=React.useState(false);
-  const pollRef=React.useRef(null);
+  const [data,setDataRaw]=useState(null);
+  const [view,setView]=useState("home");
+  const [selMember,setSelMember]=useState("");
+  const [pinInput,setPinInput]=useState("");
+  const [pinError,setPinError]=useState(false);
+  const [toast,setToast]=useState(null);
+  const [saving,setSaving]=useState(false);
+  const pollRef=useRef(null);
 
-  React.useEffect(()=>{
-    // Load data with 6s timeout fallback
+  useEffect(()=>{
     let loaded=false;
-    const timeout=setTimeout(()=>{
-      if(!loaded){ console.warn("DB timeout - using empty data"); setDataRaw(EMPTY_DATA); }
-    },6000);
-    dbLoad().then(d=>{
-      loaded=true;
-      clearTimeout(timeout);
-      setDataRaw(d||EMPTY_DATA);
-    }).catch(()=>{
-      loaded=true;
-      clearTimeout(timeout);
-      setDataRaw(EMPTY_DATA);
-    });
-    pollRef.current=setInterval(()=>{
-      dbLoad().then(d=>{ if(d) setDataRaw(d); }).catch(()=>{});
-    },12000);
-    return()=>{ clearInterval(pollRef.current); };
+    const to=setTimeout(()=>{ if(!loaded){ setDataRaw(EMPTY_DATA); } },6000);
+    dbLoad().then(d=>{ loaded=true; clearTimeout(to); setDataRaw(d||EMPTY_DATA); }).catch(()=>{ loaded=true; clearTimeout(to); setDataRaw(EMPTY_DATA); });
+    pollRef.current=setInterval(()=>{ dbLoad().then(d=>{ if(d) setDataRaw(d); }).catch(()=>{}); },12000);
+    return()=>clearInterval(pollRef.current);
   },[]);
 
-  const setData=React.useCallback((updater)=>{
+  const setData=useCallback((updater)=>{
     setSaving(true);
     setDataRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
@@ -1137,7 +1024,7 @@ function App(){
     });
   },[]);
 
-  function showToast(msg,color="#2d6a4f"){setToast({msg,color});setTimeout(()=>setToast(null),2800);}
+  function showToast(msg,color="#2d6a4f"){ setToast({msg,color}); setTimeout(()=>setToast(null),2800); }
 
   function getBalance(member){
     const l=data&&data.ledger?data.ledger[member]:null;
@@ -1145,21 +1032,15 @@ function App(){
     return l.bills.reduce((s,b)=>s+b.amount,0)-l.payments.reduce((s,p)=>s+p.amount,0);
   }
 
-  function enterAdmin(){
-    if(pinInput===ADMIN_PIN){setPinError(false);setPinInput("");setView("admin");}
-    else setPinError(true);
-  }
+  function enterAdmin(){ if(pinInput===ADMIN_PIN){ setPinError(false); setPinInput(""); setView("admin"); } else setPinError(true); }
 
   const activeTrip=data&&data.trips?data.trips.find(t=>t.status==="open"):null;
 
   if(!data) return(
-    <div style={{...S.root,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
-      <div style={{textAlign:"center",color:"#2d6a4f"}}>
-        <div style={{fontSize:56,marginBottom:14}}>🛒</div>
-        <div style={{fontWeight:800,fontSize:17}}>Loading Sabji Mandi…</div>
-        <div style={{fontSize:12,color:"#aaa",marginTop:8}}>Database se connect ho raha hai…</div>
-        <div style={{fontSize:11,color:"#ccc",marginTop:4}}>Agar zyada der lage toh internet check karo</div>
-      </div>
+    <div style={{...S.root,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",flexDirection:"column"}}>
+      <div style={{fontSize:56,marginBottom:14}}>🛒</div>
+      <div style={{fontWeight:800,fontSize:17,color:"#2d6a4f"}}>Loading Sabji Mandi…</div>
+      <div style={{fontSize:12,color:"#aaa",marginTop:8}}>Database se connect ho raha hai…</div>
     </div>
   );
 
