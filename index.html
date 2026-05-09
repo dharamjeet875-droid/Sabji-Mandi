@@ -1160,25 +1160,85 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   <p style={S.label}>🧾 Bills ({l.bills.length})</p>
                   {l.bills.length===0?<p style={{color:"#bbb",fontSize:13,marginBottom:12}}>No bills yet.</p>:
                     [...l.bills].map((bill,idx)=>(
-                      <div key={idx} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",borderLeft:"3px solid #e63946"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                          <div style={{flex:1}}>
-                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                              <b style={{fontSize:14,color:"#e63946"}}>{fmt(bill.amount)}</b>
-                              <span style={{fontSize:11,color:"#aaa"}}>📅 {bill.date}</span>
-                            </div>
-                            {bill.note&&<div style={{fontSize:11,color:"#888"}}>{bill.note}</div>}
-                            {bill.items&&bill.items.length>0&&(
-                              <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:5}}>
-                                {bill.items.map(i=><span key={i.name} style={{...S.itemTag,fontSize:10}}>{EMOJI_MAP[i.name]||"🛒"} {i.name}×{i.qty}</span>)}
-                              </div>
-                            )}
+                      <div key={idx} style={{background:"#fff",borderRadius:14,padding:"14px",marginBottom:10,boxShadow:"0 2px 10px rgba(0,0,0,0.07)",borderLeft:"3px solid #e63946"}}>
+                        {/* Bill header */}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                          <div>
+                            <b style={{fontSize:15,color:"#e63946"}}>{fmt(bill.amount)}</b>
+                            <span style={{fontSize:11,color:"#aaa",marginLeft:8}}>📅 {bill.date}</span>
                           </div>
-                          <div style={{display:"flex",gap:6,marginLeft:8,flexShrink:0}}>
+                          <div style={{display:"flex",gap:6,flexShrink:0}}>
                             <button onClick={()=>{setEditEntry({type:"bill",idx,member:accMember});setEditAmount(bill.amount);setEditDate(bill.date);setEditNote("");}} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fff9e6",color:"#b7770d",border:"1px solid #f4d03f"}}>✏️</button>
                             <button onClick={()=>{ if(window.confirm("Delete?")) deleteBill(accMember,idx); }} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fdecea",color:"#e63946",border:"1px solid #f5c6cb"}}>🗑</button>
                           </div>
                         </div>
+                        {/* Item breakdown */}
+                        {bill.items&&bill.items.length>0&&(
+                          <div style={{background:"#f8fdf8",borderRadius:10,padding:"8px 10px",marginBottom:8}}>
+                            {bill.items.map(i=>(
+                              <div key={i.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                  <span style={{fontSize:16}}>{EMOJI_MAP[i.name]||"🛒"}</span>
+                                  <div>
+                                    <span style={{fontSize:13,fontWeight:700}}>{i.name}</span>
+                                    <span style={{fontSize:11,color:"#888",marginLeft:6}}>{i.qty} kg</span>
+                                  </div>
+                                </div>
+                                <span style={{fontSize:13,fontWeight:700,color:"#2d6a4f"}}>{fmt(i.price||0)}</span>
+                              </div>
+                            ))}
+                            <div style={{borderTop:"1px dashed #cde",marginTop:6,paddingTop:6,display:"flex",justifyContent:"space-between"}}>
+                              <span style={{fontSize:12,color:"#888"}}>Total</span>
+                              <b style={{fontSize:13,color:"#e63946"}}>{fmt(bill.amount)}</b>
+                            </div>
+                          </div>
+                        )}
+                        {bill.note&&<div style={{fontSize:11,color:"#888",marginBottom:8}}>{bill.note}</div>}
+                        {/* WhatsApp single bill button */}
+                        <button onClick={()=>{
+                          const phone=getPhone(accMember);
+                          if(!phone){ alert("Phone nahi mila!"); return; }
+                          const nl="\n";
+                          const hasItems=bill.items&&bill.items.length>0;
+                          let itemsTotal=0;
+                          const itemLines=hasItems
+                            ?bill.items.map(i=>{
+                                const qty=Number(i.qty)||0;
+                                const price=Number(i.price)||0;
+                                const rate=qty>0?price/qty:0;
+                                itemsTotal+=price;
+                                const emoji=EMOJI_MAP[i.name]||"";
+                                return "  "+emoji+" "+i.name+nl
+                                  +"     Qty: "+qty+" kg  |  Rate: "+fmt(rate)+"/kg"+nl
+                                  +"     Amount: *"+fmt(price)+"*";
+                              }).join(nl)
+                            :"  (koi item detail nahi)";
+                          const travelShare=bill.amount-itemsTotal;
+                          const parts=[
+                            "*🛒 Sabji Mandi — Bill*",
+                            "━━━━━━━━━━━━━━━━",
+                            "👤 *"+accMember+"*",
+                            "📅 Date: "+bill.date,
+                            "━━━━━━━━━━━━━━━━",
+                            "",
+                            "*🧺 Samaan ki Details:*",
+                            "",
+                            itemLines,
+                            "",
+                            "━━━━━━━━━━━━━━━━",
+                          ];
+                          if(hasItems){
+                            parts.push("🧾 Items Total:  *"+fmt(itemsTotal)+"*");
+                            if(travelShare>0.01) parts.push("🚗 Travel Share: *"+fmt(travelShare)+"*");
+                          }
+                          parts.push("💰 *Kul Bill: "+fmt(bill.amount)+"*");
+                          parts.push("━━━━━━━━━━━━━━━━");
+                          parts.push("");
+                          parts.push("Jaldi payment karo ji. Shukriya! 🙏");
+                          window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(parts.join(nl)),"_blank");
+                        }} style={{width:"100%",padding:"9px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                          📲 Bill Share Karo
+                        </button>
                       </div>
                     ))
                   }
