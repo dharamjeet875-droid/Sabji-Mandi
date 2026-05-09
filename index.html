@@ -471,6 +471,11 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
   const [payMember,setPayMember]=useState("");
   const [payAmount,setPayAmount]=useState("");
   const [payNote,setPayNote]=useState("");
+  const [accMember,setAccMember]=useState(MEMBERS[0]);
+  const [editEntry,setEditEntry]=useState(null); // {type:"bill"|"payment", id, member}
+  const [editAmount,setEditAmount]=useState("");
+  const [editNote,setEditNote]=useState("");
+  const [editDate,setEditDate]=useState("");
   const [dist,setDist]=useState({});
   const [splitView,setSplitView]=useState("all");
   const [focusItem,setFocusItem]=useState(0);
@@ -611,6 +616,73 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
     setData(s=>({...s,trips:s.trips.map(t=>t.id===(selTrip&&selTrip.id)?{...t,travelExpense:Number(travelExp)}:t)}));
     showToast("Travel expense save ho gaya!");
   }
+  function deleteBill(member, billIdx){
+    setData(s=>{
+      const nl={...s.ledger};
+      const bills=[...nl[member].bills];
+      bills.splice(billIdx,1);
+      nl[member]={...nl[member],bills};
+      return{...s,ledger:nl};
+    });
+    showToast("Bill delete ho gaya");
+  }
+  function deletePayment(member, payIdx){
+    setData(s=>{
+      const nl={...s.ledger};
+      const payments=[...nl[member].payments];
+      payments.splice(payIdx,1);
+      nl[member]={...nl[member],payments};
+      return{...s,ledger:nl};
+    });
+    showToast("Payment delete ho gayi");
+  }
+  function saveEdit(){
+    if(!editEntry) return;
+    const amt=parseFloat(editAmount);
+    if(!amt||amt<=0) return showToast("Sahi amount bharo!","#e63946");
+    setData(s=>{
+      const nl={...s.ledger};
+      if(editEntry.type==="bill"){
+        nl[editEntry.member]={...nl[editEntry.member],bills:nl[editEntry.member].bills.map((b,i)=>
+          i===editEntry.idx?{...b,amount:amt,date:editDate||b.date}:b
+        )};
+      } else {
+        nl[editEntry.member]={...nl[editEntry.member],payments:nl[editEntry.member].payments.map((p,i)=>
+          i===editEntry.idx?{...p,amount:amt,note:editNote||p.note,date:editDate||p.date}:p
+        )};
+      }
+      return{...s,ledger:nl};
+    });
+    setEditEntry(null); setEditAmount(""); setEditNote(""); setEditDate("");
+    showToast("✅ Entry update ho gayi!");
+  }
+  function addManualBill(){
+    if(!accMember) return;
+    const amt=parseFloat(editAmount);
+    if(!amt||amt<=0) return showToast("Amount bharo!","#e63946");
+    const bill={id:uid(),date:editDate||todayStr(),amount:amt,items:[],note:editNote||"Manual entry"};
+    setData(s=>{
+      const nl={...s.ledger};
+      nl[accMember]={...nl[accMember],bills:[...nl[accMember].bills,bill]};
+      return{...s,ledger:nl};
+    });
+    setEditAmount(""); setEditNote(""); setEditDate("");
+    showToast("✅ Bill add ho gaya!");
+  }
+  function addManualPayment(){
+    if(!accMember) return;
+    const amt=parseFloat(editAmount);
+    if(!amt||amt<=0) return showToast("Amount bharo!","#e63946");
+    const pay={id:uid(),date:editDate||todayStr(),amount:amt,note:editNote||"Manual payment"};
+    setData(s=>{
+      const nl={...s.ledger};
+      nl[accMember]={...nl[accMember],payments:[...nl[accMember].payments,pay]};
+      return{...s,ledger:nl};
+    });
+    setEditAmount(""); setEditNote(""); setEditDate("");
+    showToast("✅ Payment add ho gayi!");
+  }
+
   function recordPayment(){
     if(!payMember||!payAmount) return showToast("Member aur amount bharo!","#e63946");
     const pay={id:uid(),date:todayStr(),amount:Number(payAmount),note:payNote||"Payment received"};
@@ -627,7 +699,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
     <div style={S.screen}>
       <Header title="Admin Panel" subtitle="Mandi Manager 🔐" onBack={()=>setView("home")}/>
       <div style={{...S.tabs}}>
-        {[["trips","🗓 Trips"],["summary","📊 Summary"],["purchase","🛍 Buy"],["split","💰 Split"],["payments","💵 Pay"]].map(([t,label])=>(
+        {[["trips","🗓 Trips"],["summary","📊 Summary"],["purchase","🛍 Buy"],["split","💰 Split"],["payments","💵 Pay"],["accounts","📋 Accounts"]].map(([t,label])=>(
           <button key={t} style={{...S.tab,...(tab===t?S.tabActive:{})}} onClick={()=>setTab(t)}>{label}</button>
         ))}
       </div>
@@ -1007,6 +1079,164 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                 </div>
               );
             })}
+          </>
+        )}
+
+        {/* ── ACCOUNTS ── */}
+        {tab==="accounts"&&(
+          <>
+            {/* Member selector */}
+            <p style={S.label}>Ghar chunno:</p>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
+              {MEMBERS.map(m=>{
+                const sel=accMember===m;
+                const bal=getBalance(m);
+                return(
+                  <button key={m} onClick={()=>{setAccMember(m);setEditEntry(null);}} style={{
+                    padding:"8px 14px",borderRadius:12,border:`2px solid ${sel?"#2d6a4f":"#d8eadf"}`,
+                    background:sel?"#2d6a4f":"#fff",color:sel?"#fff":"#333",
+                    fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:"inherit",
+                  }}>
+                    {shortName(m)}
+                    <div style={{fontSize:10,marginTop:2,fontWeight:700,color:sel?"rgba(255,255,255,0.8)":bal>0?"#e63946":"#2d6a4f"}}>
+                      {bal>0?`-${fmt(bal)}`:bal<0?`+${fmt(-bal)}`:"Clear"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {accMember&&(()=>{
+              const l=data.ledger&&data.ledger[accMember]?data.ledger[accMember]:{bills:[],payments:[]};
+              const bal=getBalance(accMember);
+              const totalBilled=l.bills.reduce((s,b)=>s+b.amount,0);
+              const totalPaid=l.payments.reduce((s,p)=>s+p.amount,0);
+              return(
+                <>
+                  {/* Balance summary card */}
+                  <div style={{...S.summaryCard,marginTop:14,background:"linear-gradient(135deg,#1a4731,#2d6a4f)",color:"#fff"}}>
+                    <div style={{fontSize:13,opacity:0.8,marginBottom:2}}>📋 {accMember}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                      <div><div style={{fontSize:11,opacity:0.7}}>Total Billed</div><div style={{fontWeight:900,fontSize:18}}>{fmt(totalBilled)}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{fontSize:11,opacity:0.7}}>Total Paid</div><div style={{fontWeight:900,fontSize:18}}>{fmt(totalPaid)}</div></div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:11,opacity:0.7}}>Balance</div>
+                        <div style={{fontWeight:900,fontSize:18,color:bal>0?"#ffb3b3":bal<0?"#b3ffcc":"#fff"}}>
+                          {bal>0?`Dena: ${fmt(bal)}`:bal<0?`Credit: ${fmt(-bal)}`:"✓ Clear"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Edit modal overlay */}
+                  {editEntry&&(
+                    <div style={{background:"#fff",borderRadius:16,padding:16,marginBottom:14,border:"2px solid #2d6a4f",boxShadow:"0 4px 20px rgba(0,0,0,0.12)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                        <b style={{fontSize:15}}>✏️ Entry Edit Karo</b>
+                        <button onClick={()=>{setEditEntry(null);setEditAmount("");setEditNote("");setEditDate("");}} style={{...S.btn,background:"#eee",color:"#333",padding:"4px 12px",fontSize:12}}>Cancel</button>
+                      </div>
+                      <input type="number" style={{...S.input,marginBottom:8}} placeholder="Amount ₹" value={editAmount} onChange={e=>setEditAmount(e.target.value)}/>
+                      {editEntry.type==="payment"&&(
+                        <input style={{...S.input,marginBottom:8}} placeholder="Note" value={editNote} onChange={e=>setEditNote(e.target.value)}/>
+                      )}
+                      <input type="date" style={{...S.input,marginBottom:10}} value={editDate} onChange={e=>setEditDate(e.target.value)}/>
+                      <button onClick={saveEdit} style={{...S.btn,...S.btnGreen,width:"100%"}}>✅ Save Changes</button>
+                    </div>
+                  )}
+
+                  {/* Add manual entry */}
+                  <div style={{background:"#f8fdf8",borderRadius:14,padding:14,marginBottom:14,border:"1.5px dashed #b7e4c7"}}>
+                    <p style={{...S.label,marginTop:0,fontSize:12}}>➕ Manual Entry Add Karo</p>
+                    <input type="number" style={{...S.input,marginBottom:8}} placeholder="Amount ₹" value={editAmount} onChange={e=>setEditAmount(e.target.value)}/>
+                    <input style={{...S.input,marginBottom:8}} placeholder="Note / Description" value={editNote} onChange={e=>setEditNote(e.target.value)}/>
+                    <input type="date" style={{...S.input,marginBottom:10}} value={editDate} onChange={e=>setEditDate(e.target.value)}/>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={addManualBill} style={{...S.btn,flex:1,background:"#e63946",color:"#fff",fontSize:13}}>+ Bill Add</button>
+                      <button onClick={addManualPayment} style={{...S.btn,...S.btnGreen,flex:1,fontSize:13}}>+ Payment Add</button>
+                    </div>
+                  </div>
+
+                  {/* Bills history */}
+                  <p style={S.label}>🧾 Bills ({l.bills.length})</p>
+                  {l.bills.length===0?<p style={{color:"#bbb",fontSize:13,marginBottom:12}}>Koi bill nahi abhi tak.</p>:
+                    [...l.bills].map((bill,idx)=>(
+                      <div key={idx} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",borderLeft:"3px solid #e63946"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                              <b style={{fontSize:14,color:"#e63946"}}>{fmt(bill.amount)}</b>
+                              <span style={{fontSize:11,color:"#aaa"}}>📅 {bill.date}</span>
+                            </div>
+                            {bill.note&&<div style={{fontSize:11,color:"#888"}}>{bill.note}</div>}
+                            {bill.items&&bill.items.length>0&&(
+                              <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:5}}>
+                                {bill.items.map(i=><span key={i.name} style={{...S.itemTag,fontSize:10}}>{EMOJI_MAP[i.name]||"🛒"} {i.name}×{i.qty}</span>)}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{display:"flex",gap:6,marginLeft:8,flexShrink:0}}>
+                            <button onClick={()=>{setEditEntry({type:"bill",idx,member:accMember});setEditAmount(bill.amount);setEditDate(bill.date);setEditNote("");}} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fff9e6",color:"#b7770d",border:"1px solid #f4d03f"}}>✏️</button>
+                            <button onClick={()=>{ if(window.confirm("Yeh bill delete karo?")) deleteBill(accMember,idx); }} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fdecea",color:"#e63946",border:"1px solid #f5c6cb"}}>🗑</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  }
+
+                  {/* Payments history */}
+                  <p style={S.label}>💵 Payments ({l.payments.length})</p>
+                  {l.payments.length===0?<p style={{color:"#bbb",fontSize:13,marginBottom:12}}>Koi payment nahi abhi tak.</p>:
+                    [...l.payments].map((pay,idx)=>(
+                      <div key={idx} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",borderLeft:"3px solid #2d6a4f"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                              <b style={{fontSize:14,color:"#2d6a4f"}}>+{fmt(pay.amount)}</b>
+                              <span style={{fontSize:11,color:"#aaa"}}>📅 {pay.date}</span>
+                            </div>
+                            <div style={{fontSize:12,color:"#555"}}>{pay.note||"Payment"}</div>
+                          </div>
+                          <div style={{display:"flex",gap:6,marginLeft:8,flexShrink:0}}>
+                            <button onClick={()=>{setEditEntry({type:"payment",idx,member:accMember});setEditAmount(pay.amount);setEditDate(pay.date);setEditNote(pay.note||"");}} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fff9e6",color:"#b7770d",border:"1px solid #f4d03f"}}>✏️</button>
+                            <button onClick={()=>{ if(window.confirm("Yeh payment delete karo?")) deletePayment(accMember,idx); }} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fdecea",color:"#e63946",border:"1px solid #f5c6cb"}}>🗑</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  }
+
+                  {/* WhatsApp full statement */}
+                  <button onClick={()=>{
+                    const phone=getPhone(accMember);
+                    if(!phone){ alert("Phone nahi mila!"); return; }
+                    const billLines=[...l.bills].reverse().map((b,i)=>`  📌 Bill ${i+1}: ${fmt(b.amount)} — ${b.date}`).join("
+")||"  Koi bill nahi";
+                    const payLines=[...l.payments].reverse().map((p,i)=>`  ✅ Payment ${i+1}: ${fmt(p.amount)} — ${p.date} (${p.note||""})`).join("
+")||"  Koi payment nahi";
+                    const bal=getBalance(accMember);
+                    const msg=`📋 *Sabji Mandi — Full Account Statement*
+👤 *${accMember}*
+━━━━━━━━━━━━━━━
+
+🧾 *Bills:*
+${billLines}
+
+💵 *Payments:*
+${payLines}
+
+━━━━━━━━━━━━━━━
+🧾 Total Billed: ${fmt(totalBilled)}
+💵 Total Paid: ${fmt(totalPaid)}
+💰 *Balance: ${bal>0?`Dena hai ${fmt(bal)}`:bal<0?`Credit ${fmt(-bal)}`:"Sab clear ✓"}*
+━━━━━━━━━━━━━━━
+Shukriya! 🙏`;
+                    window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
+                  }} style={{...S.btn,width:"100%",marginTop:8,background:"#25D366",color:"#fff",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                    📲 Poora Statement WhatsApp Karo
+                  </button>
+                </>
+              );
+            })()}
           </>
         )}
 
