@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-<div id="root"><div style="display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;color:#2d6a4f;"><div style="font-size:56px;margin-bottom:14px">🛒</div><div style="font-weight:800;font-size:17px">Loading Sabji Mandi…</div><div style="font-size:12px;color:#aaa;margin-top:8px">Database se connect ho raha hai…</div></div></div>
+<div id="root"></div>
 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -281,7 +281,7 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
   function addCustomItem(){
     const name=customItem.trim();
     const qty=parseFloat(customQty);
-    if(!name) return showToast("Item ka naam likho!","#e63946");
+    if(!name) return showToast("Name likhna!","#e63946");
     if(!qty||qty<=0) return showToast("Quantity bharo!","#e63946");
     setCustomList(l=>{
       const ex=l.find(i=>i.name.toLowerCase()===name.toLowerCase());
@@ -289,13 +289,13 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
       return [...l,{name,qty,custom:true}];
     });
     setCustomItem(""); setCustomQty("");
-    showToast("✅ Custom item add ho gaya!");
+    showToast("✅ Added!");
   }
 
   function submitOrder(){
     const items=Object.entries(myOrders).filter(([,q])=>Number(q)>0).map(([name,qty])=>({name,qty:Number(qty)}));
     const allItems=[...items,...customList];
-    if(!allItems.length) return showToast("Koi item nahi chuna!","#e63946");
+    if(!allItems.length) return showToast("Kuch toh chunno!","#e63946");
     setData(s=>{
       const trips=s.trips.map(t=>{
         if(!activeTrip||t.id!==activeTrip.id) return t;
@@ -303,7 +303,7 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
       });
       return{...s,trips};
     });
-    setSubmitted(true); showToast("✅ Order place ho gaya!");
+    setSubmitted(true); showToast("✅ Done!");
   }
 
   const totalBilled=ledger.bills.reduce((s,b)=>s+b.amount,0);
@@ -318,8 +318,8 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
       <Header title={shortName(member)} subtitle={member} onBack={()=>setView("home")}/>
       <div style={{...S.balBanner,background:balance>0?"linear-gradient(90deg,#c1121f,#e63946)":balance<0?"linear-gradient(90deg,#1a4731,#2d6a4f)":"linear-gradient(90deg,#444,#666)"}}>
         <div>
-          <div style={{fontSize:11,opacity:0.8,marginBottom:2}}>Aapka Balance</div>
-          <div style={{fontSize:20,fontWeight:900}}>{balance>0?`Aap doge ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"Sab Clear ✓"}</div>
+          <div style={{fontSize:11,opacity:0.8,marginBottom:2}}>Balance</div>
+          <div style={{fontSize:20,fontWeight:900}}>{balance>0?`Owes ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"Clear ✓"}</div>
         </div>
         <div style={{fontSize:36}}>{balance>0?"📤":balance<0?"💰":"✅"}</div>
       </div>
@@ -403,7 +403,7 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
 
               <div style={S.stickyBottom}>
                 <button style={{...S.btn,...S.btnGreen,width:"100%"}} onClick={submitOrder}>
-                  {submitted?"✏️ Order Update Karo":"✅ Order Place Karo"}
+                  {submitted?"✏️ Update Order":"✅ Place Order"}
                 </button>
               </div>
             </>
@@ -419,13 +419,13 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
             <div style={{...S.summaryRow,borderTop:"1.5px solid #e8f5e9",paddingTop:10,marginTop:2}}>
               <span style={{fontWeight:800}}>Net Balance</span>
               <b style={{fontSize:17,color:balance>0?"#e63946":"#2d6a4f"}}>
-                {balance>0?`Dena hai ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"Settled ✓"}
+                {balance>0?`Owes ${fmt(balance)}`:balance<0?`Credit ${fmt(-balance)}`:"Settled ✓"}
               </b>
             </div>
           </div>
           <p style={S.label}>🧾 Trip Bills</p>
           {ledger.bills.length===0
-            ?<div style={S.emptyBox}><p style={S.emptyText}>Koi bill nahi abhi tak.</p></div>
+            ?<div style={S.emptyBox}><p style={S.emptyText}>No bills yet.</p></div>
             :[...ledger.bills].reverse().map((bill,idx)=>(
               <div key={idx} style={{...S.histCard,borderLeft:"3px solid #e63946"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -442,7 +442,7 @@ function CustomerScreen({data,setData,activeTrip,member,setView,showToast,getBal
           }
           <p style={S.label}>💵 Payments</p>
           {ledger.payments.length===0
-            ?<div style={S.emptyBox}><p style={S.emptyText}>Koi payment nahi abhi tak.</p></div>
+            ?<div style={S.emptyBox}><p style={S.emptyText}>No payments yet.</p></div>
             :[...ledger.payments].reverse().map((pay,idx)=>(
               <div key={idx} style={{...S.histCard,borderLeft:"3px solid #2d6a4f"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -568,11 +568,11 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
 
   function finalizeSplit(){
     if(!selTrip||!selTrip.items||!selTrip.items.length){
-      showToast("Pehle Buy tab mein items add karo!","#e63946"); return;
+      showToast("Add items in Buy tab first!","#e63946"); return;
     }
     const result=calcSplit(selTrip,dist);
     if(!Object.keys(result).length){
-      showToast("Koi member select nahi hai items mein!","#e63946"); return;
+      showToast("Select at least one member!","#e63946"); return;
     }
     setFinalBill(result);
   }
@@ -596,14 +596,14 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
     const trip={id:uid(),date:newDate,status:"open",items:[],orders:[],travelExpense:0};
     setData(s=>({...s,trips:[trip,...s.trips]}));
     setSelTripId(trip.id);
-    showToast("🛒 Trip ban gayi!");
+    showToast("✅ Trip created!");
   }
   function closeTrip(id){
     setData(s=>({...s,trips:s.trips.map(t=>t.id===id?{...t,status:"closed"}:t)}));
-    showToast("Trip band ho gayi.");
+    showToast("Closed.");
   }
   function addItem(){
-    if(!purchItem||!purchQty||!purchPrice) return showToast("Sare fields bharo!","#e63946");
+    if(!purchItem||!purchQty||!purchPrice) return showToast("Fill all fields!","#e63946");
     const item={id:uid(),name:purchItem,qty:Number(purchQty),totalCost:Number(purchPrice)};
     setData(s=>({...s,trips:s.trips.map(t=>t.id===(selTrip&&selTrip.id)?{...t,items:[...t.items,item]}:t)}));
     setPurchItem(""); setPurchQty(""); setPurchPrice("");
@@ -614,7 +614,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
   }
   function saveTravelExp(){
     setData(s=>({...s,trips:s.trips.map(t=>t.id===(selTrip&&selTrip.id)?{...t,travelExpense:Number(travelExp)}:t)}));
-    showToast("Travel expense save ho gaya!");
+    showToast("Saved!");
   }
   function deleteBill(member, billIdx){
     setData(s=>{
@@ -654,7 +654,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
       return{...s,ledger:nl};
     });
     setEditEntry(null); setEditAmount(""); setEditNote(""); setEditDate("");
-    showToast("✅ Entry update ho gayi!");
+    showToast("✅ Updated!");
   }
   function addManualBill(){
     if(!accMember) return;
@@ -667,7 +667,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
       return{...s,ledger:nl};
     });
     setEditAmount(""); setEditNote(""); setEditDate("");
-    showToast("✅ Bill add ho gaya!");
+    showToast("✅ Saved!");
   }
   function addManualPayment(){
     if(!accMember) return;
@@ -680,15 +680,15 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
       return{...s,ledger:nl};
     });
     setEditAmount(""); setEditNote(""); setEditDate("");
-    showToast("✅ Payment add ho gayi!");
+    showToast("✅ Saved!");
   }
 
   function recordPayment(){
-    if(!payMember||!payAmount) return showToast("Member aur amount bharo!","#e63946");
+    if(!payMember||!payAmount) return showToast("Fill all fields!","#e63946");
     const pay={id:uid(),date:todayStr(),amount:Number(payAmount),note:payNote||"Payment received"};
     setData(s=>({...s,ledger:{...s.ledger,[payMember]:{...s.ledger[payMember],payments:[...s.ledger[payMember].payments,pay]}}}));
     setPayAmount(""); setPayNote("");
-    showToast("✅ "+fmt(Number(payAmount))+" record ho gaya");
+    showToast("✅ "+fmt(Number(payAmount))+" saved!");
   }
 
   const totalItemCost=selTrip&&selTrip.items?selTrip.items.reduce((s,i)=>s+i.totalCost,0):0;
@@ -708,12 +708,12 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
         {/* ── TRIPS ── */}
         {tab==="trips"&&(
           <>
-            <p style={S.label}>Nayi Trip</p>
+            <p style={S.label}>New Trip</p>
             <div style={{display:"flex",gap:8}}>
               <input type="date" style={{...S.input,flex:1}} value={newDate} onChange={e=>setNewDate(e.target.value)}/>
               <button style={{...S.btn,...S.btnGreen}} onClick={createTrip}>+ Trip</button>
             </div>
-            {data.trips.length===0&&<div style={S.emptyBox}><p style={S.emptyText}>Koi trip nahi abhi tak.</p></div>}
+            {data.trips.length===0&&<div style={S.emptyBox}><p style={S.emptyText}>No trips yet.</p></div>}
             {data.trips.map(trip=>(
               <div key={trip.id} style={{...S.tripCard,border:`2px solid ${selTrip&&selTrip.id===trip.id?"#2d6a4f":"transparent"}`}} onClick={()=>setSelTripId(trip.id)}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -740,9 +740,9 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   <div style={{fontSize:28,fontWeight:900}}>{selTrip.orders.length} <span style={{fontSize:14,fontWeight:400}}>members</span></div>
                   <div style={{fontSize:13,opacity:0.8,marginTop:4}}>{mergedOrders.filter(i=>!i.custom).length} items ordered</div>
                 </div>
-                {mergedOrders.length===0?<div style={S.emptyBox}><p style={S.emptyText}>Koi order nahi abhi tak.</p></div>:(
+                {mergedOrders.length===0?<div style={S.emptyBox}><p style={S.emptyText}>No orders yet.</p></div>:(
                   <>
-                    <p style={S.label}>🛒 Mandi se lana hai yeh:</p>
+                    <p style={S.label}>🛒 Shopping List</p>
                     {mergedOrders.filter(i=>!i.custom).map(item=>(
                       <div key={item.name} style={S.mergeRow}>
                         <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
@@ -759,7 +759,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                     ))}
                     {mergedOrders.some(i=>i.custom)&&(
                       <>
-                        <p style={{...S.label,color:"#b7770d"}}>✏️ Custom Items (Special):</p>
+                        <p style={{...S.label,color:"#b7770d"}}>✏️ Special Requests</p>
                         {mergedOrders.filter(i=>i.custom).map(item=>(
                           <div key={item.name} style={{...S.mergeRow,background:"#fff9e6",border:"1.5px solid #f4d03f"}}>
                             <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
@@ -805,10 +805,10 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   <input style={{...S.input,flex:1}} placeholder="Qty kg/pcs" type="number" value={purchQty} onChange={e=>setPurchQty(e.target.value)}/>
                   <input style={{...S.input,flex:1}} placeholder="Total ₹ diya" type="number" value={purchPrice} onChange={e=>setPurchPrice(e.target.value)}/>
                 </div>
-                <button style={{...S.btn,...S.btnGreen,marginTop:8,width:"100%"}} onClick={addItem}>+ Item Add Karo</button>
+                <button style={{...S.btn,...S.btnGreen,marginTop:8,width:"100%"}} onClick={addItem}>+ Add</button>
                 {selTrip.items.length>0&&(
                   <>
-                    <p style={{...S.label,marginTop:18}}>Kharida Hua Samaan</p>
+                    <p style={{...S.label,marginTop:18}}>Items</p>
                     {selTrip.items.map(item=>(
                       <div key={item.id} style={S.purchaseRow}>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -849,12 +849,12 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                   </div>
                 </div>
 
-                {selTrip.items.length===0?<div style={S.emptyBox}><p style={S.emptyText}>Pehle Buy tab mein items add karo.</p></div>:(
+                {selTrip.items.length===0?<div style={S.emptyBox}><p style={S.emptyText}>Buy tab mein items add karo.</p></div>:(
                   <>
                     <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
-                      <span style={{fontSize:13,fontWeight:800,color:"#555",flex:1}}>📦 Items baanto:</span>
-                      <button onClick={()=>setSplitView("all")} style={{...S.pill,background:splitView==="all"?"#2d6a4f":"#e8f5e9",color:splitView==="all"?"#fff":"#2d6a4f",fontWeight:800}}>Sab Ek Saath</button>
-                      <button onClick={()=>{setSplitView("one");setFocusItem(0);}} style={{...S.pill,background:splitView==="one"?"#2d6a4f":"#e8f5e9",color:splitView==="one"?"#fff":"#2d6a4f",fontWeight:800}}>Ek Ek Karke</button>
+                      <span style={{fontSize:13,fontWeight:800,color:"#555",flex:1}}>📦 Distribute:</span>
+                      <button onClick={()=>setSplitView("all")} style={{...S.pill,background:splitView==="all"?"#2d6a4f":"#e8f5e9",color:splitView==="all"?"#fff":"#2d6a4f",fontWeight:800}}>All Items</button>
+                      <button onClick={()=>{setSplitView("one");setFocusItem(0);}} style={{...S.pill,background:splitView==="one"?"#2d6a4f":"#e8f5e9",color:splitView==="one"?"#fff":"#2d6a4f",fontWeight:800}}>One by One</button>
                     </div>
 
                     {splitView==="one"&&(
@@ -889,7 +889,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                           </div>
 
                           <div style={{marginBottom:12}}>
-                            <div style={{fontSize:12,fontWeight:800,color:"#666",marginBottom:8}}>Kisne liya? Tap karke choose karo:</div>
+                            <div style={{fontSize:12,fontWeight:800,color:"#666",marginBottom:8}}>Tap to select:</div>
                             <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
                               <button onClick={()=>selAll(item.id)} style={{padding:"8px 14px",borderRadius:20,cursor:"pointer",fontFamily:"inherit",fontWeight:900,fontSize:12,border:`2px solid ${d.sel.length===MEMBERS.length?"#1a4731":"#2d6a4f"}`,background:d.sel.length===MEMBERS.length?"#1a4731":"#fff",color:d.sel.length===MEMBERS.length?"#fff":"#2d6a4f"}}>
                                 Sabhi ✓
@@ -908,7 +908,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
 
                           {!d.customMode&&(
                             <div style={{background:"#f0faf4",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
-                              <div style={{fontSize:12,color:"#555",fontWeight:700,marginBottom:4}}>Barabar split ({d.sel.length} log):</div>
+                              <div style={{fontSize:12,color:"#555",fontWeight:700,marginBottom:4}}>Equal split ({d.sel.length} log):</div>
                               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                                 {d.sel.map(m=>(
                                   <span key={m} style={{background:"#fff",border:"1px solid #b7e4c7",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:700,color:"#1a4731"}}>
@@ -947,7 +947,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                               {d.customMode?"✏️ Custom ON":"✏️ Custom Qty"}
                             </button>
                             <button onClick={()=>confirmItem(item.id)} style={{...S.btn,flex:1,padding:"9px 10px",fontSize:12,background:d.confirmed?"#e8f5e9":"#2d6a4f",color:d.confirmed?"#2d6a4f":"#fff",border:`1.5px solid ${d.confirmed?"#2d6a4f":"transparent"}`}}>
-                              {d.confirmed?"✅ Confirmed!":"✔ Confirm Item"}
+                              {d.confirmed?"✅ Confirmed!":"✔ Confirm"}
                             </button>
                           </div>
                         </div>
@@ -967,7 +967,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                         </div>
 
                         <button onClick={finalizeSplit} style={{...S.btn,width:"100%",background:"#1a4731",color:"#fff",fontSize:14,marginBottom:10}}>
-                          🧮 Bill Calculate Karo & Dekho
+                          🧮 Calculate Bills
                         </button>
 
                         {finalBill&&(
@@ -996,16 +996,16 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                                 </div>
                                 <button onClick={()=>sendWA(member,bd,selTrip.date,(selTrip.travelExpense||0)/Object.keys(finalBill).length,selTrip.items)}
                                   style={{width:"100%",padding:"9px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                                  📲 WhatsApp {shortName(member)}
+                                  📲 {shortName(member)}
                                 </button>
                               </div>
                             ))}
                             <button onClick={()=>sendAllWA(finalBill,selTrip.date,selTrip.travelExpense||0,selTrip.items)}
                               style={{...S.btn,width:"100%",marginBottom:10,fontSize:14,background:"#128C7E",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                              📲 Sabko WhatsApp Bhejo
+                              📲 Send All
                             </button>
                             <button onClick={()=>{
-                              if(!finalBill||!Object.keys(finalBill).length) return showToast("Pehle calculate karo!","#e63946");
+                              if(!finalBill||!Object.keys(finalBill).length) return showToast("Calculate first!","#e63946");
                               setData(s=>{
                                 const nl={};
                                 // copy existing ledger
@@ -1019,9 +1019,9 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                                 return{...s,ledger:nl,trips:s.trips.map(t=>t.id===selTrip.id?{...t,status:"settled"}:t)};
                               });
                               setFinalBill(null);
-                              showToast("✅ Bills sabke account mein add ho gaye!");
+                              showToast("✅ ✅ Bills saved!");
                             }} style={{...S.btn,...S.btnGreen,width:"100%",fontSize:15}}>
-                              ✅ Final Karo — Sabke Account Mein Bill Daalo
+                              ✅ Confirm & Save Bills
                             </button>
                           </>
                         )}
@@ -1038,18 +1038,18 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
         {/* ── PAYMENTS ── */}
         {tab==="payments"&&(
           <>
-            <p style={S.label}>Payment Record Karo</p>
+            <p style={S.label}>Record Payment</p>
             <select style={S.select} value={payMember} onChange={e=>setPayMember(e.target.value)}>
               <option value="">— Member chunno —</option>
-              {MEMBERS.map(m=><option key={m} value={m}>{m} · dena hai {fmt(getBalance(m))}</option>)}
+              {MEMBERS.map(m=><option key={m} value={m}>{m} · owes {fmt(getBalance(m))}</option>)}
             </select>
             <div style={{display:"flex",gap:8,marginTop:8}}>
               <input style={{...S.input,flex:1}} placeholder="Amount ₹" type="number" value={payAmount} onChange={e=>setPayAmount(e.target.value)}/>
               <input style={{...S.input,flex:1}} placeholder="Note (optional)" value={payNote} onChange={e=>setPayNote(e.target.value)}/>
             </div>
-            <button style={{...S.btn,...S.btnGreen,marginTop:10,width:"100%"}} onClick={recordPayment}>💵 Payment Record Karo</button>
+            <button style={{...S.btn,...S.btnGreen,marginTop:10,width:"100%"}} onClick={recordPayment}>💵 Record Payment</button>
 
-            <p style={{...S.label,marginTop:24}}>Sabka Balance</p>
+            <p style={{...S.label,marginTop:24}}>All Balances</p>
             {MEMBERS.map(m=>{
               const bal=getBalance(m);
               const l=data.ledger&&data.ledger[m]?data.ledger[m]:{bills:[],payments:[]};
@@ -1073,7 +1073,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                       const msg=`Sat Sri Akal ${shortName(m)} Ji 🙏\n\nAapka Sabji Mandi balance hai: *₹${bal.toFixed(2)}*\nKripaya payment kar do. Shukriya! 🙏`;
                       window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
                     }} style={{marginTop:8,width:"100%",padding:"8px",borderRadius:10,border:"none",background:"#25D366",color:"#fff",fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
-                      📲 Payment Remind — {shortName(m)}
+                      📲 Remind {shortName(m)}
                     </button>
                   )}
                 </div>
@@ -1086,7 +1086,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
         {tab==="accounts"&&(
           <>
             {/* Member selector */}
-            <p style={S.label}>Ghar chunno:</p>
+            <p style={S.label}>Select Member:</p>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
               {MEMBERS.map(m=>{
                 const sel=accMember===m;
@@ -1146,7 +1146,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
 
                   {/* Add manual entry */}
                   <div style={{background:"#f8fdf8",borderRadius:14,padding:14,marginBottom:14,border:"1.5px dashed #b7e4c7"}}>
-                    <p style={{...S.label,marginTop:0,fontSize:12}}>➕ Manual Entry Add Karo</p>
+                    <p style={{...S.label,marginTop:0,fontSize:12}}>➕ Manual Entry</p>
                     <input type="number" style={{...S.input,marginBottom:8}} placeholder="Amount ₹" value={editAmount} onChange={e=>setEditAmount(e.target.value)}/>
                     <input style={{...S.input,marginBottom:8}} placeholder="Note / Description" value={editNote} onChange={e=>setEditNote(e.target.value)}/>
                     <input type="date" style={{...S.input,marginBottom:10}} value={editDate} onChange={e=>setEditDate(e.target.value)}/>
@@ -1158,7 +1158,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
 
                   {/* Bills history */}
                   <p style={S.label}>🧾 Bills ({l.bills.length})</p>
-                  {l.bills.length===0?<p style={{color:"#bbb",fontSize:13,marginBottom:12}}>Koi bill nahi abhi tak.</p>:
+                  {l.bills.length===0?<p style={{color:"#bbb",fontSize:13,marginBottom:12}}>No bills yet.</p>:
                     [...l.bills].map((bill,idx)=>(
                       <div key={idx} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",borderLeft:"3px solid #e63946"}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -1176,7 +1176,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                           </div>
                           <div style={{display:"flex",gap:6,marginLeft:8,flexShrink:0}}>
                             <button onClick={()=>{setEditEntry({type:"bill",idx,member:accMember});setEditAmount(bill.amount);setEditDate(bill.date);setEditNote("");}} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fff9e6",color:"#b7770d",border:"1px solid #f4d03f"}}>✏️</button>
-                            <button onClick={()=>{ if(window.confirm("Yeh bill delete karo?")) deleteBill(accMember,idx); }} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fdecea",color:"#e63946",border:"1px solid #f5c6cb"}}>🗑</button>
+                            <button onClick={()=>{ if(window.confirm("Delete?")) deleteBill(accMember,idx); }} style={{...S.btn,padding:"5px 10px",fontSize:11,background:"#fdecea",color:"#e63946",border:"1px solid #f5c6cb"}}>🗑</button>
                           </div>
                         </div>
                       </div>
@@ -1185,7 +1185,7 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
 
                   {/* Payments history */}
                   <p style={S.label}>💵 Payments ({l.payments.length})</p>
-                  {l.payments.length===0?<p style={{color:"#bbb",fontSize:13,marginBottom:12}}>Koi payment nahi abhi tak.</p>:
+                  {l.payments.length===0?<p style={{color:"#bbb",fontSize:13,marginBottom:12}}>No payments yet.</p>:
                     [...l.payments].map((pay,idx)=>(
                       <div key={idx} style={{background:"#fff",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 6px rgba(0,0,0,0.06)",borderLeft:"3px solid #2d6a4f"}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -1227,12 +1227,12 @@ ${payLines}
 ━━━━━━━━━━━━━━━
 🧾 Total Billed: ${fmt(totalBilled)}
 💵 Total Paid: ${fmt(totalPaid)}
-💰 *Balance: ${bal>0?`Dena hai ${fmt(bal)}`:bal<0?`Credit ${fmt(-bal)}`:"Sab clear ✓"}*
+💰 *Balance: ${bal>0?`Owes ${fmt(bal)}`:bal<0?`Credit ${fmt(-bal)}`:"Sab clear ✓"}*
 ━━━━━━━━━━━━━━━
 Shukriya! 🙏`;
                     window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(msg),"_blank");
                   }} style={{...S.btn,width:"100%",marginTop:8,background:"#25D366",color:"#fff",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                    📲 Poora Statement WhatsApp Karo
+                    📲 Full Statement
                   </button>
                 </>
               );
@@ -1257,10 +1257,10 @@ function App(){
   const pollRef=useRef(null);
 
   useEffect(()=>{
-    let loaded=false;
-    const to=setTimeout(()=>{ if(!loaded){ setDataRaw(EMPTY_DATA); } },6000);
-    dbLoad().then(d=>{ loaded=true; clearTimeout(to); setDataRaw(d||EMPTY_DATA); }).catch(()=>{ loaded=true; clearTimeout(to); setDataRaw(EMPTY_DATA); });
-    pollRef.current=setInterval(()=>{ dbLoad().then(d=>{ if(d) setDataRaw(d); }).catch(()=>{}); },12000);
+    // Show app immediately with empty data, then load from DB
+    setDataRaw(EMPTY_DATA);
+    dbLoad().then(d=>{ if(d) setDataRaw(d); }).catch(()=>{});
+    pollRef.current=setInterval(()=>{ dbLoad().then(d=>{ if(d) setDataRaw(d); }).catch(()=>{}); },15000);
     return()=>clearInterval(pollRef.current);
   },[]);
 
@@ -1285,17 +1285,11 @@ function App(){
 
   const activeTrip=data&&data.trips?data.trips.find(t=>t.status==="open"):null;
 
-  if(!data) return(
-    <div style={{...S.root,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",flexDirection:"column"}}>
-      <div style={{fontSize:56,marginBottom:14}}>🛒</div>
-      <div style={{fontWeight:800,fontSize:17,color:"#2d6a4f"}}>Loading Sabji Mandi…</div>
-      <div style={{fontSize:12,color:"#aaa",marginTop:8}}>Database se connect ho raha hai…</div>
-    </div>
-  );
+  if(!data) return null;
 
   return(
     <div style={S.root}>
-      {saving&&<div style={S.savingBar}>💾 Saving…</div>}
+      {saving&&<div style={{position:"fixed",bottom:6,right:10,background:"rgba(26,71,49,0.85)",color:"#fff",fontSize:10,fontWeight:700,padding:"4px 10px",borderRadius:20,zIndex:1000}}>💾</div>}
       {toast&&<div style={{...S.toast,background:toast.color}}>{toast.msg}</div>}
       {view==="home"&&<HomeScreen setView={setView} selMember={selMember} setSelMember={setSelMember} getBalance={getBalance}/>}
       {view==="customer"&&<CustomerScreen data={data} setData={setData} activeTrip={activeTrip} member={selMember} setView={setView} showToast={showToast} getBalance={getBalance}/>}
