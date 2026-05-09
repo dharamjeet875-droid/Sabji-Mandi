@@ -521,23 +521,32 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
   }
 
   function calcSplit(trip,distData){
-    if(!trip||!trip.orders||!trip.orders.length) return{};
+    if(!trip||!trip.items||!trip.items.length) return{};
     const d=distData||dist;
-    const ordered=trip.orders.map(o=>o.member);
-    const n=ordered.length||1;
+    // Collect all involved members from dist selections
+    const involvedSet={};
+    trip.items.forEach(item=>{
+      const cur=d[item.id]||{sel:MEMBERS.slice(),customMode:false,customQtys:{}};
+      cur.sel.forEach(m=>{ involvedSet[m]=true; });
+    });
+    const involved=Object.keys(involvedSet);
+    if(!involved.length) return{};
+    const n=involved.length;
     const travShare=(trip.travelExpense||0)/n;
     const res={};
-    ordered.forEach(m=>{ res[m]={amount:travShare,items:[]}; });
-    (trip.items||[]).forEach(item=>{
-      const cur=d[item.id]||{sel:ordered,customMode:false,customQtys:{}};
-      const elig=cur.sel.filter(m=>res[m]!==undefined);
+    involved.forEach(m=>{ res[m]={amount:travShare,items:[]}; });
+    trip.items.forEach(item=>{
+      const cur=d[item.id]||{sel:MEMBERS.slice(),customMode:false,customQtys:{}};
+      const elig=cur.sel.filter(m=>res[m]);
       if(!elig.length) return;
       const rate=item.qty>0?item.totalCost/item.qty:0;
       if(cur.customMode&&Object.keys(cur.customQtys).length>0){
         elig.forEach(m=>{
           const q=parseFloat(cur.customQtys[m])||0;
-          res[m].items.push({name:item.name,qty:q,price:parseFloat((rate*q).toFixed(2))});
-          res[m].amount+=rate*q;
+          if(q>0){
+            res[m].items.push({name:item.name,qty:q,price:parseFloat((rate*q).toFixed(2))});
+            res[m].amount+=rate*q;
+          }
         });
       } else {
         const eachQ=parseFloat((item.qty/elig.length).toFixed(2));
@@ -548,15 +557,19 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
         });
       }
     });
-    Object.keys(res).forEach(m=>res[m].amount=parseFloat(res[m].amount.toFixed(2)));
+    Object.keys(res).forEach(m=>{ res[m].amount=parseFloat(res[m].amount.toFixed(2)); });
     return res;
   }
 
   function finalizeSplit(){
-    if(!selTrip||!selTrip.orders||!selTrip.orders.length){
-      showToast("Koi order nahi is trip mein!","#e63946"); return;
+    if(!selTrip||!selTrip.items||!selTrip.items.length){
+      showToast("Pehle Buy tab mein items add karo!","#e63946"); return;
     }
-    setFinalBill(calcSplit(selTrip,dist));
+    const result=calcSplit(selTrip,dist);
+    if(!Object.keys(result).length){
+      showToast("Koi member select nahi hai items mein!","#e63946"); return;
+    }
+    setFinalBill(result);
   }
 
   function getMerged(trip){
@@ -922,15 +935,21 @@ function AdminScreen({data,setData,setView,showToast,getBalance}){
                             <button onClick={()=>{
                               if(!finalBill||!Object.keys(finalBill).length) return showToast("Pehle calculate karo!","#e63946");
                               setData(s=>{
-                                const nl={...s.ledger};
-                                Object.entries(finalBill).forEach(([m,d])=>{
-                                  nl[m]={...nl[m],bills:[...nl[m].bills,{tripId:selTrip.id,date:selTrip.date,amount:d.amount,items:d.items}]};
+                                const nl={};
+                                // copy existing ledger
+                                MEMBERS.forEach(m=>{ nl[m]={...s.ledger[m]}; });
+                                // add bill to each member in finalBill
+                                Object.entries(finalBill).forEach(([m,bd])=>{
+                                  if(nl[m]){
+                                    nl[m]={...nl[m],bills:[...nl[m].bills,{tripId:selTrip.id,date:selTrip.date,amount:bd.amount,items:bd.items}]};
+                                  }
                                 });
                                 return{...s,ledger:nl,trips:s.trips.map(t=>t.id===selTrip.id?{...t,status:"settled"}:t)};
                               });
-                              showToast("✅ Bills sab ko bhej diye!");
+                              setFinalBill(null);
+                              showToast("✅ Bills sabke account mein add ho gaye!");
                             }} style={{...S.btn,...S.btnGreen,width:"100%",fontSize:15}}>
-                              ✅ Final Karo & Sabko Bill Bhejo
+                              ✅ Final Karo — Sabke Account Mein Bill Daalo
                             </button>
                           </>
                         )}
